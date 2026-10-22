@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoginScreen } from "./components/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
 import { useUpdates } from "./hooks/useUpdates";
+import { canCancelSales } from "@teka/shared";
 import {
   moduleFromAction,
   type AppModule,
@@ -159,6 +160,7 @@ export function App() {
           currency={currency}
           companyName={companyName}
           branchName={branchName}
+          canCancelSales={canCancelSales(user)}
         />
       );
       break;

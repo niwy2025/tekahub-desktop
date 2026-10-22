@@ -140,6 +140,7 @@ export interface AuthUser {
   } | null;
 }
 
+/** Rôles autorisés à annuler une vente depuis la caisse desktop. */
 export interface AuthSelectableProfile {
   id: string;
   name?: string;

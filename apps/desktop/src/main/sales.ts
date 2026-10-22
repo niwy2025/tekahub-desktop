@@ -1,14 +1,16 @@
-import type {
-  CancelSalePayload,
-  CreateSalePayload,
-  Sale,
-  SaleClientCheckPayload,
-  SaleClientCheckResponse,
-  SaleDetailResponse,
-  SaleHistoryQuery,
-  SaleHistoryResponse,
+import {
+  canCancelSales,
+  type CancelSalePayload,
+  type CreateSalePayload,
+  type Sale,
+  type SaleClientCheckPayload,
+  type SaleClientCheckResponse,
+  type SaleDetailResponse,
+  type SaleHistoryQuery,
+  type SaleHistoryResponse,
 } from "@teka/shared";
-import { apiRequest } from "./api-client";
+import { ApiError, apiRequest } from "./api-client";
+import { getCachedUser } from "./session";
 
 export async function checkSaleClient(
   payload: SaleClientCheckPayload,
@@ -69,8 +71,14 @@ export async function getSaleDetail(saleId: string): Promise<Sale> {
   return payload as Sale;
 }
 
-/** Soft-cancel POS : statut annulee (restaure stock côté API). */
+/** Soft-cancel POS : statut annulee (restaure stock côté API). Réservé admin/manager/gérant. */
 export async function cancelSale(payload: CancelSalePayload): Promise<Sale> {
+  if (!canCancelSales(getCachedUser())) {
+    throw new ApiError("Seuls les administrateurs peuvent annuler une vente.", 403, {
+      message: "Seuls les administrateurs peuvent annuler une vente.",
+    });
+  }
+
   const data = await apiRequest<Sale | { data?: Sale }>(`/api/ventes/${payload.saleId}`, {
     method: "PUT",
     body: {

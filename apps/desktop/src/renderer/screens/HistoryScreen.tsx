@@ -49,6 +49,8 @@ type Props = {
   currency?: string | null;
   companyName?: string | null;
   branchName?: string | null;
+  /** Annulation réservée admin / manager / gérant. */
+  canCancelSales?: boolean;
 };
 
 function toNum(value: number | string | null | undefined): number {
@@ -125,7 +127,13 @@ function itemName(item: NonNullable<Sale["items"]>[number]): string {
   return item.produit_nom?.trim() || item.produit?.nom?.trim() || "—";
 }
 
-export function HistoryScreen({ locale, currency, companyName, branchName }: Props) {
+export function HistoryScreen({
+  locale,
+  currency,
+  companyName,
+  branchName,
+  canCancelSales = false,
+}: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [range, setRange] = useState<RangePreset>("today");
   const [query, setQuery] = useState("");
@@ -267,7 +275,7 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
   }
 
   async function confirmCancelSale() {
-    if (!detail || cancelBusy || !isValidated(detail.statut)) return;
+    if (!canCancelSales || !detail || cancelBusy || !isValidated(detail.statut)) return;
     const lignes = (detail.items ?? [])
       .map((item) => ({
         produit_id: String(item.produit_id ?? ""),
@@ -550,6 +558,7 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
           printBusy={printBusy}
           printMsg={printMsg}
           printOk={printOk}
+          allowCancel={canCancelSales}
           cancelBusy={cancelBusy}
           cancelConfirm={cancelConfirm}
           cancelMsg={cancelMsg}
@@ -576,6 +585,7 @@ function SaleDetailModal({
   printBusy,
   printMsg,
   printOk,
+  allowCancel,
   cancelBusy,
   cancelConfirm,
   cancelMsg,
@@ -593,6 +603,7 @@ function SaleDetailModal({
   printBusy: boolean;
   printMsg: string | null;
   printOk: boolean;
+  allowCancel: boolean;
   cancelBusy: boolean;
   cancelConfirm: boolean;
   cancelMsg: string | null;
@@ -622,7 +633,9 @@ function SaleDetailModal({
   }, [onClose, cancelConfirm, cancelBusy, onAbortCancel]);
 
   const cur = currency ?? sale?.devise_principale ?? null;
-  const canCancel = Boolean(sale && isValidated(sale.statut) && !isCancelled(sale.statut));
+  const canCancel = Boolean(
+    allowCancel && sale && isValidated(sale.statut) && !isCancelled(sale.statut),
+  );
 
   return (
     <div role="presentation" style={backdrop} onClick={onClose}>
