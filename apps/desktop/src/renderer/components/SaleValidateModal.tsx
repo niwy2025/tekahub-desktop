@@ -2,13 +2,20 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
 import type { AppLocale, CreateSalePayload } from "@teka/shared";
+import {
+  findClientByPhone,
+  getClientsSnapshot,
+  subscribeClients,
+  upsertLocalClient,
+} from "../catalog/clientCatalogStore";
 import { formatPrice } from "../hooks/useProducts";
-import { t } from "../i18n/messages";
+import { friendlyNetworkError, t } from "../i18n/messages";
 import type { CartLine } from "./CartPanel";
 
 type ClientStatus = "idle" | "checking" | "found" | "new" | "error";
@@ -42,7 +49,11 @@ export function SaleValidateModal({
   const phoneRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
-  const checkSeq = useRef(0);
+  const clientsState = useSyncExternalStore(
+    subscribeClients,
+    getClientsSnapshot,
+    getClientsSnapshot,
+  );
 
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
@@ -71,7 +82,8 @@ export function SaleValidateModal({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose, submitting]);
 
-  async function runClientCheck(rawPhone: string) {
+  /** Recherche 100 % locale — pas d’appel API à chaque numéro. */
+  function runClientCheck(rawPhone: string) {
     const telephone = rawPhone.trim();
     if (!telephone) {
       setClientId(null);
@@ -79,51 +91,38 @@ export function SaleValidateModal({
       setStatusMsg(null);
       return;
     }
-    if (!window.teka?.checkSaleClient) return;
 
-    const seq = ++checkSeq.current;
+    setSubmitError(null);
     setStatus("checking");
     setStatusMsg(t(locale, "saleClientChecking"));
-    setSubmitError(null);
 
-    try {
-      const result = await window.teka.checkSaleClient({
-        client_telephone: telephone,
-      });
-      if (seq !== checkSeq.current) return;
-
-      if (result.matched && result.client?.id) {
-        setClientId(result.client.id);
-        setName(
-          result.client.nom?.trim() ||
-            result.normalized?.client_nom?.trim() ||
-            "",
-        );
-        if (result.normalized?.client_telephone) {
-          setPhone(result.normalized.client_telephone);
-        }
-        setStatus("found");
-        setStatusMsg(t(locale, "saleClientFound"));
-        requestAnimationFrame(() => confirmRef.current?.focus());
-        return;
-      }
-
-      setClientId(null);
-      setStatus("new");
-      setStatusMsg(t(locale, "saleClientNew"));
-      requestAnimationFrame(() => nameRef.current?.focus());
-    } catch (err) {
-      if (seq !== checkSeq.current) return;
-      setClientId(null);
-      setStatus("error");
-      setStatusMsg(err instanceof Error ? err.message : String(err));
+    const match = findClientByPhone(telephone, clientsState.clients);
+    if (match?.id) {
+      setClientId(match.id);
+      setName(match.nom?.trim() || "");
+      if (match.telephone) setPhone(match.telephone);
+      setStatus("found");
+      setStatusMsg(
+        `${t(locale, "saleClientFound")}${match.nom ? ` — ${match.nom}` : ""}`,
+      );
+      requestAnimationFrame(() => confirmRef.current?.focus());
+      return;
     }
+
+    setClientId(null);
+    setStatus("new");
+    setStatusMsg(
+      clientsState.clients.length === 0 && !clientsState.loading
+        ? t(locale, "saleClientCacheEmpty")
+        : t(locale, "saleClientNew"),
+    );
+    requestAnimationFrame(() => nameRef.current?.focus());
   }
 
   function onPhoneKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
-      void runClientCheck(phone);
+      runClientCheck(phone);
     }
   }
 
@@ -135,7 +134,6 @@ export function SaleValidateModal({
   }
 
   function clearClient() {
-    checkSeq.current += 1;
     setPhone("");
     setName("");
     setClientId(null);
@@ -154,11 +152,6 @@ export function SaleValidateModal({
     if (telephone && status === "new" && !nom) {
       setSubmitError(t(locale, "saleClientNameRequired"));
       nameRef.current?.focus();
-      return;
-    }
-
-    if (telephone && status === "checking") {
-      setSubmitError(t(locale, "saleClientWaitCheck"));
       return;
     }
 
@@ -182,10 +175,24 @@ export function SaleValidateModal({
     }
 
     try {
-      await window.teka.createSale(payload);
+      const sale = await window.teka.createSale(payload);
+      if (clientId) {
+        upsertLocalClient({
+          id: clientId,
+          nom: nom || sale.client_nom || null,
+          telephone: telephone || sale.client_telephone || null,
+        });
+      } else if (telephone && nom) {
+        // Nouveau client créé côté API — entrée locale jusqu’au prochain refresh.
+        upsertLocalClient({
+          id: `local:${telephone}`,
+          nom,
+          telephone,
+        });
+      }
       onSuccess();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : String(err));
+      setSubmitError(friendlyNetworkError(locale, err, "saleSubmitError"));
       setSubmitting(false);
     }
   }
@@ -273,7 +280,7 @@ export function SaleValidateModal({
                 }}
                 onKeyDown={onPhoneKeyDown}
                 onBlur={() => {
-                  if (phone.trim()) void runClientCheck(phone);
+                  if (phone.trim()) runClientCheck(phone);
                 }}
                 placeholder={t(locale, "saleClientPhonePlaceholder")}
                 disabled={submitting}

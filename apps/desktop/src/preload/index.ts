@@ -8,6 +8,7 @@ import {
   type LocaleInfo,
   type PackLocalState,
   type PackUpdateState,
+  type Client,
   type CreateSalePayload,
   type Product,
   type ProductListQuery,
@@ -56,6 +57,7 @@ const api = {
     ipcRenderer.invoke(IpcChannels.setLocale, locale),
   listProducts: (query?: ProductListQuery): Promise<Product[]> =>
     ipcRenderer.invoke(IpcChannels.listProducts, query),
+  listClients: (): Promise<Client[]> => ipcRenderer.invoke(IpcChannels.listClients),
   checkSaleClient: (payload: SaleClientCheckPayload): Promise<SaleClientCheckResponse> =>
     ipcRenderer.invoke(IpcChannels.checkSaleClient, payload),
   createSale: (payload: CreateSalePayload): Promise<Sale> =>

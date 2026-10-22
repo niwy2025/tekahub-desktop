@@ -66,18 +66,20 @@ export const messages = {
     salePaymentCash: "Paiement : espèces",
     saleClientSection: "Client (optionnel)",
     saleClientHint:
-      "Saisissez le numéro puis Entrée pour vérifier. Si inconnu, indiquez le nom. Vous pouvez aussi valider sans client.",
+      "Saisissez le numéro : la recherche est locale (clients préchargés). Si inconnu, indiquez le nom. Client optionnel.",
     saleClientPhone: "Téléphone",
     saleClientPhonePlaceholder: "+243…",
     saleClientName: "Nom",
     saleClientNamePlaceholder: "Nom du client",
     saleClientOptional: "Aucun client — vente comptoir",
-    saleClientChecking: "Vérification du client…",
-    saleClientFound: "Client trouvé",
+    saleClientChecking: "Recherche dans le carnet local…",
+    saleClientFound: "Client trouvé dans le carnet",
     saleClientNew: "Nouveau client — renseignez le nom",
     saleClientNameRequired: "Indiquez le nom pour ce nouveau client.",
-    saleClientWaitCheck: "Patientez pendant la vérification du client.",
+    saleClientWaitCheck: "Patientez pendant la recherche.",
     saleClientSkip: "Continuer sans client",
+    saleClientCacheEmpty: "Carnet clients encore vide — saisissez nom + téléphone ou validez sans client.",
+    saleSubmitError: "Impossible d’enregistrer la vente. Vérifiez la connexion puis réessayez.",
     saleConfirm: "Confirmer la vente",
     saleSubmitting: "Enregistrement…",
     productsTitle: "Produits",
@@ -238,18 +240,21 @@ export const messages = {
     salePaymentCash: "Payment: cash",
     saleClientSection: "Customer (optional)",
     saleClientHint:
-      "Enter the phone then press Enter to look up. If unknown, add a name. You can also validate without a customer.",
+      "Enter the phone: lookup is local (clients preloaded at login). If unknown, add a name. Customer is optional.",
     saleClientPhone: "Phone",
     saleClientPhonePlaceholder: "+243…",
     saleClientName: "Name",
     saleClientNamePlaceholder: "Customer name",
     saleClientOptional: "No customer — counter sale",
-    saleClientChecking: "Looking up customer…",
-    saleClientFound: "Customer found",
+    saleClientChecking: "Searching the local directory…",
+    saleClientFound: "Customer found in the directory",
     saleClientNew: "New customer — enter a name",
     saleClientNameRequired: "Enter a name for this new customer.",
-    saleClientWaitCheck: "Please wait while we check the customer.",
+    saleClientWaitCheck: "Please wait while we search.",
     saleClientSkip: "Continue without customer",
+    saleClientCacheEmpty:
+      "Customer directory still empty — enter name + phone, or validate without a customer.",
+    saleSubmitError: "Could not save the sale. Check your connection, then try again.",
     saleConfirm: "Confirm sale",
     saleSubmitting: "Saving…",
     productsTitle: "Products",
@@ -358,7 +363,11 @@ export function normalizeLocale(value?: string | null): AppLocale {
 }
 
 /** Transforme erreurs IPC / net::ERR_* en message utilisateur. */
-export function friendlyProductsError(locale: AppLocale, err: unknown): string {
+export function friendlyNetworkError(
+  locale: AppLocale,
+  err: unknown,
+  fallbackKey: MessageKey = "productsErrorGeneric",
+): string {
   const raw = err instanceof Error ? err.message : String(err ?? "");
   const text = raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, "");
 
@@ -387,16 +396,19 @@ export function friendlyProductsError(locale: AppLocale, err: unknown): string {
     return t(locale, "productsErrorRefused");
   }
   if (code === "GENERIC" || /fetch failed|net::ERR_|TEKA_NET:/i.test(text)) {
-    return t(locale, "productsErrorGeneric");
+    return t(locale, fallbackKey);
   }
 
   if (/TEKA_AUTH:UNAUTHENTICATED|Unauthenticated/i.test(text)) {
-    return t(locale, "productsErrorGeneric");
+    return t(locale, fallbackKey);
   }
 
-  // Message API métier déjà lisible — sinon générique.
   if (text && !/Error invoking|at async |node:|undici/i.test(text) && text.length < 160) {
     return text;
   }
-  return t(locale, "productsErrorGeneric");
+  return t(locale, fallbackKey);
+}
+
+export function friendlyProductsError(locale: AppLocale, err: unknown): string {
+  return friendlyNetworkError(locale, err, "productsErrorGeneric");
 }

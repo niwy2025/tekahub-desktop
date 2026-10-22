@@ -88,6 +88,7 @@ export const IpcChannels = {
   getLocale: "teka:get-locale",
   setLocale: "teka:set-locale",
   listProducts: "teka:list-products",
+  listClients: "teka:list-clients",
   checkSaleClient: "teka:check-sale-client",
   createSale: "teka:create-sale",
   onSessionExpired: "teka:on-session-expired",

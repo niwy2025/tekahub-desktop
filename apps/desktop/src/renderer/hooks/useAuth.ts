@@ -5,8 +5,19 @@ import type {
   AuthUser,
   SessionInfo,
 } from "@teka/shared";
+import { clearClients, ensureClientsLoaded } from "../catalog/clientCatalogStore";
 import { clearCatalog, ensureCatalogLoaded } from "../catalog/productCatalogStore";
 import { normalizeLocale } from "../i18n/messages";
+
+function preloadOfflineCaches(locale: AppLocale) {
+  void ensureCatalogLoaded(locale);
+  void ensureClientsLoaded(locale);
+}
+
+function clearOfflineCaches() {
+  clearCatalog();
+  clearClients();
+}
 
 export function useAuth() {
   const [booting, setBooting] = useState(true);
@@ -31,7 +42,7 @@ export function useAuth() {
         setUser(nextUser);
         setLocaleState(nextLocaleNorm);
         if (nextUser) {
-          void ensureCatalogLoaded(nextLocaleNorm);
+          preloadOfflineCaches(nextLocaleNorm);
         }
       })
       .catch((err) => {
@@ -44,7 +55,7 @@ export function useAuth() {
   useEffect(() => {
     if (!window.teka?.onSessionExpired) return;
     return window.teka.onSessionExpired(() => {
-      clearCatalog();
+      clearOfflineCaches();
       setUser(null);
       setProfiles([]);
       setSession((prev) =>
@@ -69,14 +80,14 @@ export function useAuth() {
         apiConfigured: session?.apiConfigured ?? true,
         apiBaseUrl: session?.apiBaseUrl ?? null,
       });
-      void ensureCatalogLoaded(locale);
+      preloadOfflineCaches(locale);
       return "ok" as const;
     },
     [locale, session?.apiBaseUrl, session?.apiConfigured],
   );
 
   const logout = useCallback(async () => {
-    clearCatalog();
+    clearOfflineCaches();
     await window.teka.logout();
     setUser(null);
     setProfiles([]);

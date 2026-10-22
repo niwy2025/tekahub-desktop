@@ -8,6 +8,7 @@ import {
   type LocaleInfo,
   type PackLocalState,
   type PackUpdateState,
+  type Client,
   type CreateSalePayload,
   type Product,
   type ProductListQuery,
@@ -20,6 +21,7 @@ import {
 import { fetchMe, getSessionInfo, login, logout, restoreSession } from "./auth";
 import { ApiError, setUnauthorizedHandler } from "./api-client";
 import { listProducts } from "./catalog";
+import { listAllClients } from "./clients";
 import { checkSaleClient, createSale } from "./sales";
 import { appConfig } from "./config";
 import { getAppLocale, getDeviceLocale, setAppLocale } from "./locale";
@@ -154,6 +156,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       }
     },
   );
+
+  ipcMain.handle(IpcChannels.listClients, async (): Promise<Client[]> => {
+    try {
+      return await listAllClients();
+    } catch (err) {
+      throw toIpcError(err);
+    }
+  });
 
   ipcMain.handle(
     IpcChannels.checkSaleClient,
