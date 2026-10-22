@@ -14,11 +14,11 @@ import { useAutoFocus } from "../keyboard/useAutoFocus";
 import { t } from "../i18n/messages";
 
 /**
- * Flux clavier thermique / scanner :
- * 1. Recherche autofocus (scan → Entrée ajoute au panier, focus reste ici)
- * 2. Tab → Valider
- * 3. Tab → Vider
- * La grille produits est hors tabulation (souris uniquement).
+ * Flux clavier POS / scanner thermique :
+ * 1. Recherche autofocus — catalogue déjà chargé, filtre local
+ * 2. Entrée → si code-barres/SKU exact : ajoute ; sinon focus liste produits
+ * 3. Flèches sur la liste → produit cible ; Entrée → panier
+ * 4. Tab → Valider → Vider (grille hors tabulation)
  */
 export function PosScreen({
   locale,
@@ -32,12 +32,14 @@ export function PosScreen({
   const localRef = useRef<HTMLInputElement>(null);
   const searchRef = searchRefExternal ?? localRef;
   const validateRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [listFocused, setListFocused] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   useAutoFocus(searchRef);
 
-  const { products, loading, error } = useProducts(query);
+  const { products, allProducts, loading, error } = useProducts(query);
 
   useEffect(() => {
     if (products.length === 0) {
@@ -48,6 +50,14 @@ export function PosScreen({
       setHighlightId(products[0].id);
     }
   }, [products, highlightId]);
+
+  useEffect(() => {
+    if (!highlightId || !listRef.current) return;
+    const el = listRef.current.querySelector<HTMLElement>(
+      `[data-product-id="${CSS.escape(highlightId)}"]`,
+    );
+    el?.scrollIntoView({ block: "nearest" });
+  }, [highlightId, listFocused]);
 
   function addToCart(product: Product) {
     setCart((prev) => {
@@ -61,20 +71,44 @@ export function PosScreen({
     });
     setHighlightId(product.id);
     setQuery("");
+    setListFocused(false);
     searchRef.current?.focus();
   }
 
-  function findScanMatch(raw: string): Product | null {
+  function findScanMatch(raw: string, pool: Product[]): Product | null {
     const q = raw.trim().toLowerCase();
     if (!q) return null;
-    const exact = products.find(
+    const exact = pool.find(
       (p) =>
         p.code_barre?.trim().toLowerCase() === q ||
         p.sku?.trim().toLowerCase() === q,
     );
     if (exact) return exact;
-    if (products.length === 1) return products[0];
+    if (pool.length === 1) return pool[0];
     return null;
+  }
+
+  function focusProductList() {
+    if (products.length === 0) return;
+    if (!products.some((p) => p.id === highlightId)) {
+      setHighlightId(products[0].id);
+    }
+    setListFocused(true);
+    listRef.current?.focus();
+  }
+
+  function gridColumns(): number {
+    const width = listRef.current?.clientWidth ?? 0;
+    // aligné sur minmax(160px, 1fr) + gap 12
+    return Math.max(1, Math.floor((width + 12) / 172));
+  }
+
+  function moveHighlight(delta: number) {
+    if (products.length === 0) return;
+    const idx = products.findIndex((p) => p.id === highlightId);
+    const from = idx < 0 ? 0 : idx;
+    const next = Math.max(0, Math.min(products.length - 1, from + delta));
+    setHighlightId(products[next].id);
   }
 
   function increment(productId: string) {
@@ -101,12 +135,14 @@ export function PosScreen({
 
   function clearCart() {
     setCart([]);
+    setListFocused(false);
     searchRef.current?.focus();
   }
 
   function validateCart() {
     if (cart.length === 0) return;
-    // Paiement / ticket : prochaine étape. Pour l’instant on confirme le focus scanner.
+    // Paiement / ticket : prochaine étape.
+    setListFocused(false);
     searchRef.current?.focus();
   }
 
@@ -116,11 +152,73 @@ export function PosScreen({
       setQuery("");
       return;
     }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      focusProductList();
+      return;
+    }
+
     if (e.key === "Enter") {
       e.preventDefault();
-      const target = findScanMatch(query);
+      // Scanner : match exact sur tout le catalogue préchargé (pas seulement le filtre).
+      const scanned = findScanMatch(query, allProducts);
+      if (scanned && query.trim()) {
+        const exact =
+          scanned.code_barre?.trim().toLowerCase() === query.trim().toLowerCase() ||
+          scanned.sku?.trim().toLowerCase() === query.trim().toLowerCase();
+        if (exact || products.length === 1) {
+          addToCart(scanned);
+          return;
+        }
+      }
+      if (products.length === 1) {
+        addToCart(products[0]);
+        return;
+      }
+      focusProductList();
+    }
+  }
+
+  function onListKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setListFocused(false);
+      searchRef.current?.focus();
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const target = products.find((p) => p.id === highlightId) ?? products[0];
       if (target) addToCart(target);
       return;
+    }
+
+    const cols = gridColumns();
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      moveHighlight(1);
+      return;
+    }
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      moveHighlight(-1);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveHighlight(cols);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (products.findIndex((p) => p.id === highlightId) < cols) {
+        setListFocused(false);
+        searchRef.current?.focus();
+        return;
+      }
+      moveHighlight(-cols);
     }
   }
 
@@ -146,6 +244,7 @@ export function PosScreen({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onSearchKeyDown}
+            onFocus={() => setListFocused(false)}
             placeholder={t(locale, "posSearchPlaceholder")}
             autoComplete="off"
             style={searchInput}
@@ -156,8 +255,18 @@ export function PosScreen({
           ) : null}
 
           <div
+            ref={listRef}
             role="listbox"
+            tabIndex={-1}
             aria-label={t(locale, "posTitle")}
+            aria-activedescendant={highlightId ? `pos-product-${highlightId}` : undefined}
+            onKeyDown={onListKeyDown}
+            onFocus={() => setListFocused(true)}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setListFocused(false);
+              }
+            }}
             style={{
               marginTop: 14,
               maxHeight: "calc(100vh - 260px)",
@@ -166,6 +275,9 @@ export function PosScreen({
               gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
               gap: 12,
               alignContent: "start",
+              outline: listFocused ? "2px solid var(--tek-yellow)" : "none",
+              outlineOffset: 4,
+              borderRadius: 12,
             }}
           >
             {loading ? (
@@ -184,6 +296,8 @@ export function PosScreen({
                 return (
                   <button
                     key={product.id}
+                    id={`pos-product-${product.id}`}
+                    data-product-id={product.id}
                     type="button"
                     tabIndex={-1}
                     role="option"
@@ -203,7 +317,9 @@ export function PosScreen({
                           : "var(--tek-bg)",
                       boxShadow: inCart
                         ? "inset 0 0 0 2px var(--tek-yellow)"
-                        : undefined,
+                        : active && listFocused
+                          ? "inset 0 0 0 2px var(--tek-black)"
+                          : undefined,
                     }}
                   >
                     {inCart ? (

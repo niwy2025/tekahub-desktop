@@ -1,27 +1,61 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppLocale, Product } from "@teka/shared";
 
-/** Même source que le front web : GET /api/produits */
+function normalizeText(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+/** Filtre local — même logique que sales/new du front web. */
+export function filterProducts(products: Product[], search: string): Product[] {
+  const query = normalizeText(search);
+  if (!query) return products;
+  return products.filter((product) =>
+    [product.nom, product.sku, product.code_barre, product.categorie?.nom]
+      .filter(Boolean)
+      .some((value) => normalizeText(String(value)).includes(query)),
+  );
+}
+
+async function fetchAllProducts(): Promise<Product[]> {
+  if (!window.teka) return [];
+
+  const perPage = 100;
+  const all: Product[] = [];
+  let page = 1;
+
+  // Une seule charge initiale (comme le web), pas de recherche API à chaque frappe.
+  while (page <= 50) {
+    const batch = await window.teka.listProducts({
+      type: "produit",
+      per_page: perPage,
+      page,
+      actif: true,
+    });
+    all.push(...batch);
+    if (batch.length < perPage) break;
+    page += 1;
+  }
+
+  return all;
+}
+
+/**
+ * Précharge le catalogue une fois, puis filtre en local sur `search`.
+ * Évite le debounce API lent du POS / scanner.
+ */
 export function useProducts(search: string, enabled = true) {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async (q: string) => {
+  const reload = useCallback(async () => {
     if (!window.teka) return;
     setLoading(true);
     setError(null);
     try {
-      const list = await window.teka.listProducts({
-        type: "produit",
-        search: q || undefined,
-        per_page: 50,
-        page: 1,
-        actif: true,
-      });
-      setProducts(list);
+      setAllProducts(await fetchAllProducts());
     } catch (err) {
-      setProducts([]);
+      setAllProducts([]);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -30,13 +64,15 @@ export function useProducts(search: string, enabled = true) {
 
   useEffect(() => {
     if (!enabled) return;
-    const handle = window.setTimeout(() => {
-      void reload(search.trim());
-    }, 250);
-    return () => window.clearTimeout(handle);
-  }, [enabled, search, reload]);
+    void reload();
+  }, [enabled, reload]);
 
-  return { products, loading, error, reload: () => void reload(search.trim()) };
+  const products = useMemo(
+    () => filterProducts(allProducts, search),
+    [allProducts, search],
+  );
+
+  return { products, allProducts, loading, error, reload };
 }
 
 /**
