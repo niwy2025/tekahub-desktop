@@ -91,6 +91,12 @@ export const IpcChannels = {
   listClients: "teka:list-clients",
   checkSaleClient: "teka:check-sale-client",
   createSale: "teka:create-sale",
+  listSaleHistory: "teka:list-sale-history",
+  getSaleDetail: "teka:get-sale-detail",
+  getPrinterSettings: "teka:get-printer-settings",
+  setPrinterSettings: "teka:set-printer-settings",
+  listPrinters: "teka:list-printers",
+  printSaleReceipt: "teka:print-sale-receipt",
   onSessionExpired: "teka:on-session-expired",
 } as const;
 
@@ -223,10 +229,95 @@ export type CreateSalePayload = {
   lignes: SaleLinePayload[];
 };
 
+export type SaleItem = {
+  id?: string;
+  produit_id?: string | null;
+  produit_nom?: string | null;
+  quantite?: number | string | null;
+  prix_unitaire?: number | string | null;
+  total_ligne?: number | string | null;
+  produit?: { id?: string; nom?: string | null } | null;
+};
+
 export type Sale = {
   id: string;
   reference?: string | null;
+  date_vente?: string | null;
+  statut?: string | null;
+  moyen_paiement?: string | null;
   montant_total?: number | string | null;
+  montant_paye?: number | string | null;
+  montant_restant?: number | string | null;
   client_nom?: string | null;
   client_telephone?: string | null;
+  devise_principale?: string | null;
+  items?: SaleItem[] | null;
+};
+
+export type SaleHistoryQuery = {
+  limit?: number;
+  date_from?: string | null;
+  date_to?: string | null;
+};
+
+export type SaleHistoryGroup = {
+  date: string;
+  label: string;
+  total_count: number;
+  total_amount: number;
+  ventes: Sale[];
+};
+
+export type SaleHistoryResponse = {
+  server_time?: string;
+  timezone?: string;
+  groups: SaleHistoryGroup[];
+  meta?: {
+    limit?: number;
+    date_from?: string | null;
+    date_to?: string | null;
+  };
+};
+
+export type SaleDetailResponse = {
+  server_time?: string;
+  timezone?: string;
+  entity?: string;
+  data: Sale;
+};
+
+export type PrinterInfo = {
+  name: string;
+  displayName: string;
+  description?: string;
+  isDefault?: boolean;
+};
+
+export type PrinterSettings = {
+  /** Imprimer automatiquement après une vente réussie. */
+  autoPrintAfterSale: boolean;
+  /** Impression silencieuse (sans boîte de dialogue système). */
+  silentPrint: boolean;
+  /** Nom imprimante système, ou null = imprimante par défaut. */
+  printerName: string | null;
+};
+
+export type SaleReceiptLine = {
+  nom: string;
+  qty: number;
+  unit: number;
+  total: number;
+};
+
+export type SaleReceiptPayload = {
+  locale: AppLocale;
+  currency?: string | null;
+  companyName?: string | null;
+  branchName?: string | null;
+  sale: Sale;
+  lines: SaleReceiptLine[];
+  /** Espèces reçues (affichage ticket caissier). */
+  cashReceived?: number | null;
+  /** Monnaie à rendre. */
+  changeDue?: number | null;
 };

@@ -32,11 +32,15 @@ export type PosScreenHandle = {
 export function PosScreen({
   locale,
   currency,
+  companyName,
+  branchName,
   searchRefExternal,
   handleRef,
 }: {
   locale: AppLocale;
   currency?: string | null;
+  companyName?: string | null;
+  branchName?: string | null;
   searchRefExternal?: RefObject<HTMLInputElement | null>;
   handleRef?: Ref<PosScreenHandle | null>;
 }) {
@@ -567,6 +571,8 @@ export function PosScreen({
         <SaleValidateModal
           locale={locale}
           currency={currency}
+          companyName={companyName}
+          branchName={branchName}
           cart={cart}
           onClose={() => {
             setSaleModalOpen(false);

@@ -24,6 +24,8 @@ type ClientStatus = "idle" | "checking" | "found" | "new" | "error";
 type Props = {
   locale: AppLocale;
   currency?: string | null;
+  companyName?: string | null;
+  branchName?: string | null;
   cart: CartLine[];
   onClose: () => void;
   onSuccess: () => void;
@@ -71,6 +73,8 @@ function toFullPhone(local: string): string {
 export function SaleValidateModal({
   locale,
   currency,
+  companyName,
+  branchName,
   cart,
   onClose,
   onSuccess,
@@ -261,6 +265,34 @@ export function SaleValidateModal({
           telephone,
         });
       }
+
+      // Impression après vente : ne bloque jamais la réussite de la vente.
+      try {
+        const printer = await window.teka.getPrinterSettings();
+        if (printer.autoPrintAfterSale) {
+          await window.teka.printSaleReceipt({
+            locale,
+            currency: currency ?? sale.devise_principale ?? null,
+            companyName: companyName ?? null,
+            branchName: branchName ?? null,
+            sale,
+            lines: cart.map((line) => {
+              const unit = unitPrice(line);
+              return {
+                nom: line.product.nom,
+                qty: line.qty,
+                unit,
+                total: unit * line.qty,
+              };
+            }),
+            cashReceived: paidAmount,
+            changeDue: changeAmount,
+          });
+        }
+      } catch {
+        // Imprimante indisponible / timeout — vente déjà enregistrée.
+      }
+
       onSuccess();
     } catch (err) {
       setSubmitError(friendlyNetworkError(locale, err, "saleSubmitError"));

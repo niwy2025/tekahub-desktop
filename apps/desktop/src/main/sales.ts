@@ -3,6 +3,9 @@ import type {
   Sale,
   SaleClientCheckPayload,
   SaleClientCheckResponse,
+  SaleDetailResponse,
+  SaleHistoryQuery,
+  SaleHistoryResponse,
 } from "@teka/shared";
 import { apiRequest } from "./api-client";
 
@@ -30,4 +33,37 @@ export async function createSale(payload: CreateSalePayload): Promise<Sale> {
     if ("sale" in data && data.sale) return data.sale;
   }
   return data as Sale;
+}
+
+/** Historique POS de l’utilisateur connecté, groupé par jour. */
+export async function listSaleHistory(
+  query: SaleHistoryQuery = {},
+): Promise<SaleHistoryResponse> {
+  const payload = await apiRequest<SaleHistoryResponse>("/api/pos/v1/ventes/historique", {
+    method: "GET",
+    query: {
+      limit: query.limit ?? 100,
+      date_from: query.date_from ?? undefined,
+      date_to: query.date_to ?? undefined,
+    },
+  });
+
+  return {
+    server_time: payload?.server_time,
+    timezone: payload?.timezone,
+    groups: Array.isArray(payload?.groups) ? payload.groups : [],
+    meta: payload?.meta,
+  };
+}
+
+export async function getSaleDetail(saleId: string): Promise<Sale> {
+  const payload = await apiRequest<SaleDetailResponse | Sale>(
+    `/api/pos/v1/ventes/${saleId}/details`,
+    { method: "GET" },
+  );
+
+  if (payload && typeof payload === "object" && "data" in payload && payload.data) {
+    return payload.data;
+  }
+  return payload as Sale;
 }

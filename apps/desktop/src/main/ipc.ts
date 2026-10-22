@@ -10,11 +10,16 @@ import {
   type PackUpdateState,
   type Client,
   type CreateSalePayload,
+  type PrinterInfo,
+  type PrinterSettings,
   type Product,
   type ProductListQuery,
   type Sale,
   type SaleClientCheckPayload,
   type SaleClientCheckResponse,
+  type SaleHistoryQuery,
+  type SaleHistoryResponse,
+  type SaleReceiptPayload,
   type SessionInfo,
   type ShellUpdateState,
 } from "@teka/shared";
@@ -22,7 +27,9 @@ import { fetchMe, getSessionInfo, login, logout, restoreSession } from "./auth";
 import { ApiError, setUnauthorizedHandler } from "./api-client";
 import { listProducts } from "./catalog";
 import { listAllClients } from "./clients";
-import { checkSaleClient, createSale } from "./sales";
+import { printSaleReceipt } from "./print-receipt";
+import { getPrinterSettings, setPrinterSettings } from "./printer-settings";
+import { checkSaleClient, createSale, getSaleDetail, listSaleHistory } from "./sales";
 import { appConfig } from "./config";
 import { getAppLocale, getDeviceLocale, setAppLocale } from "./locale";
 import { getAppPaths } from "./paths";
@@ -183,6 +190,67 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         return await createSale(payload);
       } catch (err) {
         throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.listSaleHistory,
+    async (_e, query?: SaleHistoryQuery): Promise<SaleHistoryResponse> => {
+      try {
+        return await listSaleHistory(query ?? {});
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.getSaleDetail,
+    async (_e, saleId: string): Promise<Sale> => {
+      try {
+        return await getSaleDetail(saleId);
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(IpcChannels.getPrinterSettings, (): PrinterSettings => getPrinterSettings());
+
+  ipcMain.handle(
+    IpcChannels.setPrinterSettings,
+    (_e, patch: Partial<PrinterSettings>): PrinterSettings => setPrinterSettings(patch ?? {}),
+  );
+
+  ipcMain.handle(
+    IpcChannels.listPrinters,
+    async (event): Promise<PrinterInfo[]> => {
+      try {
+        const wc = event.sender;
+        const printers = await wc.getPrintersAsync();
+        return printers.map((p) => ({
+          name: p.name,
+          displayName: p.displayName || p.name,
+          description: p.description,
+          isDefault: Boolean(p.isDefault),
+        }));
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.printSaleReceipt,
+    async (_e, payload: SaleReceiptPayload): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        return await printSaleReceipt(payload);
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
     },
   );

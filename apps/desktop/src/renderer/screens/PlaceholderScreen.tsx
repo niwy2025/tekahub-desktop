@@ -6,7 +6,7 @@ export function PlaceholderScreen({
   titleKey,
 }: {
   locale: AppLocale;
-  titleKey: Extract<MessageKey, "customersTitle" | "historyTitle">;
+  titleKey: Extract<MessageKey, "customersTitle">;
 }) {
   return (
     <div style={{ padding: 40, maxWidth: 560 }}>

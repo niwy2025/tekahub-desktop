@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoginScreen } from "./components/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
 import { useUpdates } from "./hooks/useUpdates";
@@ -9,7 +9,13 @@ import {
 } from "./keyboard/shortcuts";
 import { useGlobalShortcuts } from "./keyboard/useGlobalShortcuts";
 import { t } from "./i18n/messages";
+import {
+  moduleFromHash,
+  navigateModuleHash,
+  syncModuleHash,
+} from "./navigation/moduleRoute";
 import { PlaceholderScreen } from "./screens/PlaceholderScreen";
+import { HistoryScreen } from "./screens/HistoryScreen";
 import { PosScreen, type PosScreenHandle } from "./screens/PosScreen";
 import { ProductsScreen } from "./screens/ProductsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
@@ -30,10 +36,27 @@ export function App() {
     clearProfiles,
   } = useAuth();
   const updates = useUpdates(Boolean(user));
-  const [module, setModule] = useState<AppModule>("pos");
+  const [module, setModuleState] = useState<AppModule>(() => moduleFromHash());
   const [helpOpen, setHelpOpen] = useState(false);
   const posSearchRef = useRef<HTMLInputElement>(null);
   const posHandleRef = useRef<PosScreenHandle | null>(null);
+
+  const setModule = useCallback((next: AppModule) => {
+    setModuleState(next);
+    navigateModuleHash(next);
+  }, []);
+
+  // Hash ↔ module (F5 / lien / retour navigateur)
+  useEffect(() => {
+    if (!window.location.hash) {
+      syncModuleHash(moduleFromHash());
+    }
+    const onHashChange = () => {
+      setModuleState(moduleFromHash());
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const shortcutHandlers = useMemo(() => {
     const navigate = (action: ShortcutAction) => {
@@ -59,14 +82,17 @@ export function App() {
         void logout();
       },
     };
-  }, [logout]);
+  }, [logout, setModule]);
 
   // Sur la page doc, seul Esc/F2 (géré par ShortcutsDocsScreen) doit fermer.
   useGlobalShortcuts(shortcutHandlers, Boolean(user) && !helpOpen);
 
-  const onNavigate = useCallback((next: AppModule) => {
-    setModule(next);
-  }, []);
+  const onNavigate = useCallback(
+    (next: AppModule) => {
+      setModule(next);
+    },
+    [setModule],
+  );
 
   if (booting) {
     return (
@@ -103,6 +129,8 @@ export function App() {
   }
 
   const currency = user.entreprise?.devise ?? null;
+  const companyName = user.entreprise?.nom ?? null;
+  const branchName = user.branche?.nom ?? null;
 
   let content = null;
   switch (module) {
@@ -111,6 +139,8 @@ export function App() {
         <PosScreen
           locale={locale}
           currency={currency}
+          companyName={companyName}
+          branchName={branchName}
           searchRefExternal={posSearchRef}
           handleRef={posHandleRef}
         />
@@ -123,7 +153,14 @@ export function App() {
       content = <PlaceholderScreen locale={locale} titleKey="customersTitle" />;
       break;
     case "history":
-      content = <PlaceholderScreen locale={locale} titleKey="historyTitle" />;
+      content = (
+        <HistoryScreen
+          locale={locale}
+          currency={currency}
+          companyName={companyName}
+          branchName={branchName}
+        />
+      );
       break;
     case "settings":
       content = (

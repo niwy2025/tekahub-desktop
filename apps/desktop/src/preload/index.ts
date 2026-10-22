@@ -10,11 +10,16 @@ import {
   type PackUpdateState,
   type Client,
   type CreateSalePayload,
+  type PrinterInfo,
+  type PrinterSettings,
   type Product,
   type ProductListQuery,
   type Sale,
   type SaleClientCheckPayload,
   type SaleClientCheckResponse,
+  type SaleHistoryQuery,
+  type SaleHistoryResponse,
+  type SaleReceiptPayload,
   type SessionInfo,
   type ShellUpdateState,
 } from "@teka/shared";
@@ -62,6 +67,19 @@ const api = {
     ipcRenderer.invoke(IpcChannels.checkSaleClient, payload),
   createSale: (payload: CreateSalePayload): Promise<Sale> =>
     ipcRenderer.invoke(IpcChannels.createSale, payload),
+  listSaleHistory: (query?: SaleHistoryQuery): Promise<SaleHistoryResponse> =>
+    ipcRenderer.invoke(IpcChannels.listSaleHistory, query),
+  getSaleDetail: (saleId: string): Promise<Sale> =>
+    ipcRenderer.invoke(IpcChannels.getSaleDetail, saleId),
+  getPrinterSettings: (): Promise<PrinterSettings> =>
+    ipcRenderer.invoke(IpcChannels.getPrinterSettings),
+  setPrinterSettings: (patch: Partial<PrinterSettings>): Promise<PrinterSettings> =>
+    ipcRenderer.invoke(IpcChannels.setPrinterSettings, patch),
+  listPrinters: (): Promise<PrinterInfo[]> => ipcRenderer.invoke(IpcChannels.listPrinters),
+  printSaleReceipt: (
+    payload: SaleReceiptPayload,
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.printSaleReceipt, payload),
   onSessionExpired: (cb: () => void): (() => void) => {
     const listener = (): void => cb();
     ipcRenderer.on(IpcChannels.onSessionExpired, listener);

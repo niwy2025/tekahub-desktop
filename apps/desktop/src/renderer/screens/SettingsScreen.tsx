@@ -1,5 +1,12 @@
-import type { CSSProperties, ReactNode } from "react";
-import type { AppLocale, AuthUser, PackUpdateState, ShellUpdateState } from "@teka/shared";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import type {
+  AppLocale,
+  AuthUser,
+  PackUpdateState,
+  PrinterInfo,
+  PrinterSettings,
+  ShellUpdateState,
+} from "@teka/shared";
 import { StatusBadge } from "../components/StatusBadge";
 import { t } from "../i18n/messages";
 
@@ -93,8 +100,133 @@ export function SettingsScreen({
             ))
           )}
         </Panel>
+
+        <PrinterPanel locale={locale} />
       </section>
     </div>
+  );
+}
+
+function PrinterPanel({ locale }: { locale: AppLocale }) {
+  const [settings, setSettings] = useState<PrinterSettings | null>(null);
+  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  async function load(refreshPrinters = true) {
+    setLoading(true);
+    setError(null);
+    try {
+      if (typeof window.teka?.getPrinterSettings !== "function") {
+        setError(t(locale, "printerBridgeStale"));
+        setSettings(null);
+        return;
+      }
+      const next = await window.teka.getPrinterSettings();
+      setSettings(next);
+      if (refreshPrinters && typeof window.teka.listPrinters === "function") {
+        const list = await window.teka.listPrinters();
+        setPrinters(list);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t(locale, "printerLoadError"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, [locale]);
+
+  async function persist(patch: Partial<PrinterSettings>) {
+    if (!settings || saving) return;
+    setSaving(true);
+    setSavedMsg(null);
+    setError(null);
+    try {
+      const next = await window.teka.setPrinterSettings(patch);
+      setSettings(next);
+      setSavedMsg(t(locale, "printerSaved"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Panel title={t(locale, "printerSection")}>
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
+        {t(locale, "printerHint")}
+      </p>
+
+      {loading || !settings ? (
+        <p style={{ margin: 0, fontSize: 13, color: "var(--tek-ash)" }}>
+          {t(locale, "loading")}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <label style={checkRow}>
+            <input
+              type="checkbox"
+              checked={settings.autoPrintAfterSale}
+              disabled={saving}
+              onChange={(e) => void persist({ autoPrintAfterSale: e.target.checked })}
+            />
+            <span>{t(locale, "printerAutoPrint")}</span>
+          </label>
+
+          <label style={checkRow}>
+            <input
+              type="checkbox"
+              checked={settings.silentPrint}
+              disabled={saving}
+              onChange={(e) => void persist({ silentPrint: e.target.checked })}
+            />
+            <span>{t(locale, "printerSilent")}</span>
+          </label>
+
+          <label style={selectLabel}>
+            {t(locale, "printerDevice")}
+            <select
+              value={settings.printerName ?? ""}
+              disabled={saving}
+              onChange={(e) =>
+                void persist({ printerName: e.target.value ? e.target.value : null })
+              }
+              style={selectInput}
+            >
+              <option value="">{t(locale, "printerDefault")}</option>
+              {printers.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.displayName || p.name}
+                  {p.isDefault ? " ★" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            style={ghostBtn}
+            disabled={saving || loading}
+            onClick={() => void load(true)}
+          >
+            {t(locale, "printerRefresh")}
+          </button>
+        </div>
+      )}
+
+      {savedMsg ? (
+        <p style={{ margin: "12px 0 0", fontSize: 13, color: "#15803d" }}>{savedMsg}</p>
+      ) : null}
+      {error ? (
+        <p style={{ margin: "12px 0 0", fontSize: 13, color: "var(--tek-danger)" }}>{error}</p>
+      ) : null}
+    </Panel>
   );
 }
 
@@ -133,6 +265,34 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+const checkRow: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 10,
+  fontSize: 13,
+  fontWeight: 650,
+  cursor: "pointer",
+  lineHeight: 1.4,
+};
+
+const selectLabel: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  fontSize: 12,
+  fontWeight: 650,
+  color: "var(--tek-ash)",
+};
+
+const selectInput: CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--tek-line)",
+  borderRadius: 10,
+  padding: "10px 12px",
+  fontSize: 13,
+  background: "var(--tek-bg)",
+  color: "var(--tek-ink)",
+};
+
 const ghostBtn: CSSProperties = {
   border: "1px solid var(--tek-line)",
   background: "transparent",
@@ -141,6 +301,8 @@ const ghostBtn: CSSProperties = {
   borderRadius: 999,
   fontWeight: 650,
   fontSize: 13,
+  cursor: "pointer",
+  alignSelf: "flex-start",
 };
 
 const primaryBtn: CSSProperties = {
@@ -151,4 +313,5 @@ const primaryBtn: CSSProperties = {
   borderRadius: 999,
   fontWeight: 700,
   fontSize: 13,
+  cursor: "pointer",
 };
