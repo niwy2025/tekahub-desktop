@@ -1,4 +1,5 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, nativeImage, shell } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnvFiles } from "./load-env";
 
@@ -10,6 +11,20 @@ import { configureAutoUpdater, checkShellUpdates } from "./updater";
 import { checkAndUpdatePack } from "./pack-manager";
 import { getAppPaths } from "./paths";
 import { appConfig } from "./config";
+
+/** Icône fenêtre / dock — build/resources selon packagé ou dev. */
+function resolveAppIconPath(): string | null {
+  const candidates = [
+    join(process.resourcesPath, "resources", "icon.png"),
+    join(process.resourcesPath, "icon.png"),
+    join(__dirname, "../../resources/icon.png"),
+    join(__dirname, "../../build/icon.png"),
+  ];
+  for (const path of candidates) {
+    if (existsSync(path)) return path;
+  }
+  return null;
+}
 
 // Linux : GetVSyncParametersIfAvailable pollue le terminal — désactiver le GPU
 // sauf si TEKA_ENABLE_GPU=1. Sur les autres OS, TEKA_DISABLE_GPU=1 force le soft render.
@@ -35,6 +50,9 @@ function getWindow() {
 }
 
 function createWindow(): void {
+  const iconPath = resolveAppIconPath();
+  const icon = iconPath ? nativeImage.createFromPath(iconPath) : undefined;
+
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -43,6 +61,7 @@ function createWindow(): void {
     title: "TekaHub",
     backgroundColor: "#fbfbf8",
     show: false,
+    ...(icon && !icon.isEmpty() ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -51,6 +70,10 @@ function createWindow(): void {
       webSecurity: true,
     },
   });
+
+  if (process.platform === "darwin" && icon && !icon.isEmpty() && app.dock) {
+    app.dock.setIcon(icon);
+  }
 
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
