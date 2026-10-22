@@ -35,7 +35,7 @@ export function useAuth() {
       .finally(() => setBooting(false));
   }, []);
 
-  // Token invalide / Unauthenticated → retour écran login
+  // 401 réel en cours d’usage → retour login (token déjà purgé côté main)
   useEffect(() => {
     if (!window.teka?.onSessionExpired) return;
     return window.teka.onSessionExpired(() => {
@@ -46,9 +46,6 @@ export function useAuth() {
           ? { ...prev, authenticated: false }
           : { authenticated: false, apiConfigured: false, apiBaseUrl: null },
       );
-      void window.teka.logout().catch(() => {
-        // token déjà purgé côté main
-      });
     });
   }, []);
 

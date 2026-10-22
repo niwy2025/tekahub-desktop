@@ -4,9 +4,15 @@ import type {
   AuthUser,
   SessionInfo,
 } from "@teka/shared";
-import { apiRequest, ApiError } from "./api-client";
+import { apiRequest, ApiError, setUnauthorizedNotifySuppressed } from "./api-client";
 import { appConfig } from "./config";
-import { clearSessionToken, getSessionToken, setSessionToken } from "./session";
+import {
+  clearSessionToken,
+  getCachedUser,
+  getSessionToken,
+  setCachedUser,
+  setSessionToken,
+} from "./session";
 
 type LoginApiResponse = {
   token?: string;
@@ -77,6 +83,7 @@ export async function login(
 
   setSessionToken(token);
   const user = extractUser(payload) ?? (await fetchMe());
+  setCachedUser(user);
 
   return {
     status: "authenticated",
@@ -90,13 +97,18 @@ export async function fetchMe(): Promise<AuthUser> {
     { method: "GET" },
   );
   if (payload && typeof payload === "object" && "email" in payload && "id" in payload) {
-    return payload as AuthUser;
+    const user = payload as AuthUser;
+    setCachedUser(user);
+    return user;
   }
   if (payload && typeof payload === "object") {
     const nested =
       ("user" in payload ? payload.user : undefined) ??
       ("data" in payload ? payload.data : undefined);
-    if (nested?.id && nested.email) return nested;
+    if (nested?.id && nested.email) {
+      setCachedUser(nested);
+      return nested;
+    }
   }
   throw new Error("Profil utilisateur invalide");
 }
@@ -115,12 +127,30 @@ export async function logout(): Promise<void> {
   }
 }
 
+/**
+ * Restaure la session au démarrage.
+ * - 401 réel → purge token
+ * - erreur réseau / API down → garde le token + user en cache (pas de re-login forcé)
+ */
 export async function restoreSession(): Promise<AuthUser | null> {
   if (!getSessionToken() || !appConfig.apiBaseUrl) return null;
+
+  setUnauthorizedNotifySuppressed(true);
   try {
     return await fetchMe();
-  } catch {
-    clearSessionToken();
-    return null;
+  } catch (err) {
+    const isAuthFailure =
+      err instanceof ApiError &&
+      (err.status === 401 || err.status === 419 || err.message === "TEKA_AUTH:UNAUTHENTICATED");
+
+    if (isAuthFailure) {
+      clearSessionToken();
+      return null;
+    }
+
+    // Timeout / DNS / serveur down : conserver la session locale.
+    return getCachedUser();
+  } finally {
+    setUnauthorizedNotifySuppressed(false);
   }
 }

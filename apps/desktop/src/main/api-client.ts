@@ -4,9 +4,15 @@ import { clearSessionToken, getSessionToken } from "./session";
 
 /** Notifie le shell (IPC) quand le token est invalide — déclenche déconnexion UI. */
 let unauthorizedHandler: (() => void) | null = null;
+/** Pendant restoreSession : ne pas spammer l’UI (on gère localement). */
+let unauthorizedNotifySuppressed = false;
 
 export function setUnauthorizedHandler(handler: (() => void) | null): void {
   unauthorizedHandler = handler;
+}
+
+export function setUnauthorizedNotifySuppressed(suppressed: boolean): void {
+  unauthorizedNotifySuppressed = suppressed;
 }
 
 export function joinApiUrl(path: string): string {
@@ -161,18 +167,18 @@ export async function apiRequest<T = unknown>(
         ? (payload as { message: string }).message
         : `Erreur API (${response.status})`;
 
+    // Uniquement 401/419 HTTP — pas de match flou sur le texte (évite les faux positifs).
     const unauthenticated =
-      options.auth !== false &&
-      (response.status === 401 ||
-        response.status === 419 ||
-        /unauthenticated|token.*(invalid|expired)|unauthorized/i.test(message));
+      options.auth !== false && (response.status === 401 || response.status === 419);
 
     if (unauthenticated) {
       clearSessionToken();
-      try {
-        unauthorizedHandler?.();
-      } catch {
-        // ignore handler errors
+      if (!unauthorizedNotifySuppressed) {
+        try {
+          unauthorizedHandler?.();
+        } catch {
+          // ignore handler errors
+        }
       }
       throw new ApiError("TEKA_AUTH:UNAUTHENTICATED", response.status, payload);
     }
