@@ -1,4 +1,10 @@
-import { forwardRef, type CSSProperties } from "react";
+import {
+  forwardRef,
+  useEffect,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
 import type { AppLocale, Product } from "@teka/shared";
 import { formatPrice } from "../hooks/useProducts";
 import { t } from "../i18n/messages";
@@ -13,27 +19,43 @@ type Props = {
   locale: AppLocale;
   currency?: string | null;
   cart: CartLine[];
+  selectedLineId: string | null;
+  cartFocused: boolean;
+  listRef?: RefObject<HTMLUListElement | null>;
+  onSelectLine: (productId: string) => void;
+  onEditLine: (productId: string) => void;
   onIncrement: (productId: string) => void;
   onDecrement: (productId: string) => void;
   onRemove: (productId: string) => void;
   onClear: () => void;
   onValidate: () => void;
+  onCartKeyDown: (e: KeyboardEvent<HTMLUListElement>) => void;
+  onCartFocus: () => void;
+  onCartBlur: () => void;
 };
 
 /**
  * Tab order scanner POS : Valider (2) → Vider (3).
- * Les +/- / × ligne restent souris uniquement (tabIndex -1).
+ * Focus panier (F4) : flèches lignes, Entrée → modal quantité.
  */
 export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel(
   {
     locale,
     currency,
     cart,
+    selectedLineId,
+    cartFocused,
+    listRef,
+    onSelectLine,
+    onEditLine,
     onIncrement,
     onDecrement,
     onRemove,
     onClear,
     onValidate,
+    onCartKeyDown,
+    onCartFocus,
+    onCartBlur,
   },
   validateRef,
 ) {
@@ -41,16 +63,35 @@ export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
   const canValidate = cart.length > 0;
 
+  useEffect(() => {
+    if (!cartFocused || !selectedLineId || !listRef?.current) return;
+    const el = listRef.current.querySelector<HTMLElement>(
+      `[data-cart-line="${CSS.escape(selectedLineId)}"]`,
+    );
+    el?.scrollIntoView({ block: "nearest" });
+  }, [cartFocused, selectedLineId, listRef, cart]);
+
   return (
-    <aside style={panel} aria-label={t(locale, "posCart")}>
+    <aside
+      style={{
+        ...panel,
+        outline: cartFocused ? "2px solid var(--tek-yellow)" : "none",
+        outlineOffset: 2,
+      }}
+      aria-label={t(locale, "posCart")}
+    >
       <div style={header}>
         <div>
           <h2 style={{ margin: 0, fontSize: 16 }}>{t(locale, "posCart")}</h2>
           {cart.length > 0 ? (
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--tek-ash)" }}>
-              {itemsCount} {t(locale, "posCartItems")}
+              {itemsCount} {t(locale, "posCartItems")} · F4
             </p>
-          ) : null}
+          ) : (
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--tek-ash)" }}>
+              {t(locale, "posCartFocusHint")}
+            </p>
+          )}
         </div>
       </div>
 
@@ -61,12 +102,47 @@ export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel
           </p>
         </div>
       ) : (
-        <ul style={list}>
+        <ul
+          ref={listRef}
+          role="listbox"
+          tabIndex={-1}
+          aria-label={t(locale, "posCart")}
+          aria-activedescendant={
+            selectedLineId ? `pos-cart-line-${selectedLineId}` : undefined
+          }
+          onKeyDown={onCartKeyDown}
+          onFocus={onCartFocus}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              onCartBlur();
+            }
+          }}
+          style={list}
+        >
           {cart.map((line) => {
             const unit = unitPrice(line.product);
             const lineTotal = unit * line.qty;
+            const selected = line.product.id === selectedLineId;
             return (
-              <li key={line.product.id} style={lineCard}>
+              <li
+                key={line.product.id}
+                id={`pos-cart-line-${line.product.id}`}
+                data-cart-line={line.product.id}
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onSelectLine(line.product.id);
+                  onEditLine(line.product.id);
+                }}
+                style={{
+                  ...lineCard,
+                  borderColor: selected ? "var(--tek-black)" : "var(--tek-line)",
+                  background: selected ? "rgba(244, 198, 15, 0.18)" : "var(--tek-bg)",
+                  boxShadow:
+                    selected && cartFocused ? "inset 0 0 0 2px var(--tek-black)" : undefined,
+                  cursor: "pointer",
+                }}
+              >
                 <div style={{ minWidth: 0 }}>
                   <div
                     style={{
@@ -94,7 +170,10 @@ export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel
                       type="button"
                       tabIndex={-1}
                       aria-label={t(locale, "posCartDecrease")}
-                      onClick={() => onDecrement(line.product.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDecrement(line.product.id);
+                      }}
                       style={qtyBtn}
                     >
                       −
@@ -106,7 +185,10 @@ export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel
                       type="button"
                       tabIndex={-1}
                       aria-label={t(locale, "posCartIncrease")}
-                      onClick={() => onIncrement(line.product.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onIncrement(line.product.id);
+                      }}
                       style={qtyBtn}
                     >
                       +
@@ -115,7 +197,10 @@ export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel
                       type="button"
                       tabIndex={-1}
                       aria-label={t(locale, "posCartRemove")}
-                      onClick={() => onRemove(line.product.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemove(line.product.id);
+                      }}
                       style={removeBtn}
                     >
                       ×
@@ -209,6 +294,8 @@ const list: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
+  outline: "none",
+  borderRadius: 12,
 };
 
 const lineCard: CSSProperties = {

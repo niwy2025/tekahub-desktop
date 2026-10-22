@@ -11,6 +11,7 @@ export type ShortcutAction =
   | "nav.history"
   | "nav.settings"
   | "focus.search"
+  | "focus.cart"
   | "logout";
 
 export type ShortcutDef = {
@@ -25,6 +26,7 @@ export type ShortcutDef = {
     | "shortcutNavHistory"
     | "shortcutNavSettings"
     | "shortcutFocusSearch"
+    | "shortcutFocusCart"
     | "shortcutLogout";
   match: (e: KeyboardEvent) => boolean;
 };
@@ -74,6 +76,12 @@ export const SHORTCUTS: ShortcutDef[] = [
     descriptionKey: "shortcutFocusSearch",
     match: (e) =>
       e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e),
+  },
+  {
+    action: "focus.cart",
+    label: "F4",
+    descriptionKey: "shortcutFocusCart",
+    match: (e) => e.key === "F4",
   },
   {
     action: "logout",

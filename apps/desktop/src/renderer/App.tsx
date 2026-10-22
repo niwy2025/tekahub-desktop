@@ -10,7 +10,7 @@ import {
 import { useGlobalShortcuts } from "./keyboard/useGlobalShortcuts";
 import { t } from "./i18n/messages";
 import { PlaceholderScreen } from "./screens/PlaceholderScreen";
-import { PosScreen } from "./screens/PosScreen";
+import { PosScreen, type PosScreenHandle } from "./screens/PosScreen";
 import { ProductsScreen } from "./screens/ProductsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { AppShell } from "./shell/AppShell";
@@ -33,6 +33,7 @@ export function App() {
   const [module, setModule] = useState<AppModule>("pos");
   const [helpOpen, setHelpOpen] = useState(false);
   const posSearchRef = useRef<HTMLInputElement>(null);
+  const posHandleRef = useRef<PosScreenHandle | null>(null);
 
   const shortcutHandlers = useMemo(() => {
     const navigate = (action: ShortcutAction) => {
@@ -49,6 +50,10 @@ export function App() {
       "focus.search": () => {
         setModule("pos");
         requestAnimationFrame(() => posSearchRef.current?.focus());
+      },
+      "focus.cart": () => {
+        setModule("pos");
+        requestAnimationFrame(() => posHandleRef.current?.focusCart());
       },
       logout: () => {
         void logout();
@@ -106,6 +111,7 @@ export function App() {
           locale={locale}
           currency={currency}
           searchRefExternal={posSearchRef}
+          handleRef={posHandleRef}
         />
       );
       break;

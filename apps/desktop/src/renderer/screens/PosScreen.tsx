@@ -1,45 +1,62 @@
 import {
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type Ref,
   type RefObject,
 } from "react";
 import type { AppLocale, Product } from "@teka/shared";
 import { CartPanel, type CartLine } from "../components/CartPanel";
+import { CartQtyDialog } from "../components/CartQtyDialog";
 import { ProductListSkeleton } from "../components/Skeleton";
 import { formatPrice, useProducts } from "../hooks/useProducts";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
 import { t } from "../i18n/messages";
 
+export type PosScreenHandle = {
+  focusCart: () => void;
+  focusSearch: () => void;
+};
+
 /**
  * Flux clavier POS / scanner thermique :
- * 1. Recherche autofocus — catalogue déjà chargé, filtre local
- * 2. Entrée → si code-barres/SKU exact : ajoute ; sinon focus liste produits
- * 3. Flèches sur la liste → produit cible ; Entrée → panier
- * 4. Tab → Valider → Vider (grille hors tabulation)
+ * 1. Recherche autofocus — filtre local
+ * 2. Entrée / flèches → produits ; Entrée → panier
+ * 3. F4 → panier ; flèches → ligne ; Entrée → modal quantité
+ * 4. Tab → Valider → Vider
  */
 export function PosScreen({
   locale,
   currency,
   searchRefExternal,
+  handleRef,
 }: {
   locale: AppLocale;
   currency?: string | null;
   searchRefExternal?: RefObject<HTMLInputElement | null>;
+  handleRef?: Ref<PosScreenHandle | null>;
 }) {
   const localRef = useRef<HTMLInputElement>(null);
   const searchRef = searchRefExternal ?? localRef;
   const validateRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const cartListRef = useRef<HTMLUListElement>(null);
   const [query, setQuery] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [listFocused, setListFocused] = useState(false);
+  const [cartFocused, setCartFocused] = useState(false);
+  const [cartLineId, setCartLineId] = useState<string | null>(null);
+  const [qtyEditId, setQtyEditId] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   useAutoFocus(searchRef);
 
   const { products, allProducts, loading, error, reload } = useProducts(query, locale);
+  const qtyEditLine = qtyEditId
+    ? (cart.find((l) => l.product.id === qtyEditId) ?? null)
+    : null;
 
   useEffect(() => {
     if (products.length === 0) {
@@ -52,12 +69,46 @@ export function PosScreen({
   }, [products, highlightId]);
 
   useEffect(() => {
+    if (cart.length === 0) {
+      setCartLineId(null);
+      return;
+    }
+    if (!cart.some((l) => l.product.id === cartLineId)) {
+      setCartLineId(cart[cart.length - 1].product.id);
+    }
+  }, [cart, cartLineId]);
+
+  useEffect(() => {
     if (!highlightId || !listRef.current) return;
     const el = listRef.current.querySelector<HTMLElement>(
       `[data-product-id="${CSS.escape(highlightId)}"]`,
     );
     el?.scrollIntoView({ block: "nearest" });
   }, [highlightId, listFocused]);
+
+  function focusSearch() {
+    setListFocused(false);
+    setCartFocused(false);
+    setQtyEditId(null);
+    searchRef.current?.focus();
+  }
+
+  function focusCart() {
+    if (cart.length === 0) {
+      searchRef.current?.focus();
+      return;
+    }
+    setListFocused(false);
+    setQtyEditId(null);
+    const id = cartLineId && cart.some((l) => l.product.id === cartLineId)
+      ? cartLineId
+      : cart[cart.length - 1].product.id;
+    setCartLineId(id);
+    setCartFocused(true);
+    requestAnimationFrame(() => cartListRef.current?.focus());
+  }
+
+  useImperativeHandle(handleRef, () => ({ focusCart, focusSearch }), [cart, cartLineId]);
 
   function addToCart(product: Product) {
     setCart((prev) => {
@@ -70,8 +121,10 @@ export function PosScreen({
       return [...prev, { product, qty: 1 }];
     });
     setHighlightId(product.id);
+    setCartLineId(product.id);
     setQuery("");
     setListFocused(false);
+    setCartFocused(false);
     searchRef.current?.focus();
   }
 
@@ -93,13 +146,13 @@ export function PosScreen({
     if (!products.some((p) => p.id === highlightId)) {
       setHighlightId(products[0].id);
     }
+    setCartFocused(false);
     setListFocused(true);
     listRef.current?.focus();
   }
 
   function gridColumns(): number {
     const width = listRef.current?.clientWidth ?? 0;
-    // aligné sur minmax(160px, 1fr) + gap 12
     return Math.max(1, Math.floor((width + 12) / 172));
   }
 
@@ -109,6 +162,14 @@ export function PosScreen({
     const from = idx < 0 ? 0 : idx;
     const next = Math.max(0, Math.min(products.length - 1, from + delta));
     setHighlightId(products[next].id);
+  }
+
+  function moveCartLine(delta: number) {
+    if (cart.length === 0) return;
+    const idx = cart.findIndex((l) => l.product.id === cartLineId);
+    const from = idx < 0 ? 0 : idx;
+    const next = Math.max(0, Math.min(cart.length - 1, from + delta));
+    setCartLineId(cart[next].product.id);
   }
 
   function increment(productId: string) {
@@ -129,21 +190,43 @@ export function PosScreen({
     );
   }
 
+  function setLineQty(productId: string, qty: number) {
+    if (qty <= 0) {
+      removeLine(productId);
+      return;
+    }
+    setCart((prev) =>
+      prev.map((line) =>
+        line.product.id === productId ? { ...line, qty } : line,
+      ),
+    );
+  }
+
   function removeLine(productId: string) {
     setCart((prev) => prev.filter((line) => line.product.id !== productId));
+    if (qtyEditId === productId) setQtyEditId(null);
   }
 
   function clearCart() {
     setCart([]);
-    setListFocused(false);
+    setCartLineId(null);
+    setQtyEditId(null);
+    setCartFocused(false);
     searchRef.current?.focus();
   }
 
   function validateCart() {
     if (cart.length === 0) return;
-    // Paiement / ticket : prochaine étape.
     setListFocused(false);
+    setCartFocused(false);
+    setQtyEditId(null);
     searchRef.current?.focus();
+  }
+
+  function openQtyEdit(productId: string) {
+    setCartLineId(productId);
+    setQtyEditId(productId);
+    setCartFocused(false);
   }
 
   function onSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -161,7 +244,6 @@ export function PosScreen({
 
     if (e.key === "Enter") {
       e.preventDefault();
-      // Scanner : match exact sur tout le catalogue préchargé (pas seulement le filtre).
       const scanned = findScanMatch(query, allProducts);
       if (scanned && query.trim()) {
         const exact =
@@ -183,8 +265,13 @@ export function PosScreen({
   function onListKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Escape") {
       e.preventDefault();
-      setListFocused(false);
-      searchRef.current?.focus();
+      focusSearch();
+      return;
+    }
+
+    if (e.key === "F4") {
+      e.preventDefault();
+      focusCart();
       return;
     }
 
@@ -198,6 +285,11 @@ export function PosScreen({
     const cols = gridColumns();
     if (e.key === "ArrowRight") {
       e.preventDefault();
+      const idx = products.findIndex((p) => p.id === highlightId);
+      if (idx >= 0 && (idx + 1) % cols === 0) {
+        focusCart();
+        return;
+      }
       moveHighlight(1);
       return;
     }
@@ -214,11 +306,47 @@ export function PosScreen({
     if (e.key === "ArrowUp") {
       e.preventDefault();
       if (products.findIndex((p) => p.id === highlightId) < cols) {
-        setListFocused(false);
-        searchRef.current?.focus();
+        focusSearch();
         return;
       }
       moveHighlight(-cols);
+    }
+  }
+
+  function onCartKeyDown(e: KeyboardEvent<HTMLUListElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      focusSearch();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveCartLine(1);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      moveCartLine(-1);
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (cartLineId) openQtyEdit(cartLineId);
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      if (cartLineId) removeLine(cartLineId);
+      return;
+    }
+    if (e.key === "-" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      if (cartLineId) openQtyEdit(cartLineId);
+      return;
+    }
+    if (e.key === "+" || e.key === "ArrowRight") {
+      e.preventDefault();
+      if (cartLineId) openQtyEdit(cartLineId);
     }
   }
 
@@ -244,7 +372,10 @@ export function PosScreen({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onSearchKeyDown}
-            onFocus={() => setListFocused(false)}
+            onFocus={() => {
+              setListFocused(false);
+              setCartFocused(false);
+            }}
             placeholder={t(locale, "posSearchPlaceholder")}
             autoComplete="off"
             style={searchInput}
@@ -276,7 +407,10 @@ export function PosScreen({
             aria-label={t(locale, "posTitle")}
             aria-activedescendant={highlightId ? `pos-product-${highlightId}` : undefined}
             onKeyDown={onListKeyDown}
-            onFocus={() => setListFocused(true)}
+            onFocus={() => {
+              setListFocused(true);
+              setCartFocused(false);
+            }}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
                 setListFocused(false);
@@ -374,16 +508,57 @@ export function PosScreen({
 
         <CartPanel
           ref={validateRef}
+          listRef={cartListRef}
           locale={locale}
           currency={currency}
           cart={cart}
+          selectedLineId={cartLineId}
+          cartFocused={cartFocused}
+          onSelectLine={setCartLineId}
+          onEditLine={openQtyEdit}
           onIncrement={increment}
           onDecrement={decrement}
           onRemove={removeLine}
           onClear={clearCart}
           onValidate={validateCart}
+          onCartKeyDown={onCartKeyDown}
+          onCartFocus={() => {
+            setCartFocused(true);
+            setListFocused(false);
+          }}
+          onCartBlur={() => setCartFocused(false)}
         />
       </div>
+
+      {qtyEditLine ? (
+        <CartQtyDialog
+          locale={locale}
+          currency={currency}
+          line={qtyEditLine}
+          onConfirm={(qty) => {
+            setLineQty(qtyEditLine.product.id, qty);
+            setQtyEditId(null);
+            focusCart();
+          }}
+          onRemove={() => {
+            const id = qtyEditLine.product.id;
+            const remaining = cart.filter((l) => l.product.id !== id);
+            removeLine(id);
+            setQtyEditId(null);
+            if (remaining.length === 0) {
+              focusSearch();
+              return;
+            }
+            setCartLineId(remaining[remaining.length - 1].product.id);
+            setCartFocused(true);
+            requestAnimationFrame(() => cartListRef.current?.focus());
+          }}
+          onClose={() => {
+            setQtyEditId(null);
+            focusCart();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
