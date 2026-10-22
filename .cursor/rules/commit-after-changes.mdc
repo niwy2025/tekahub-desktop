@@ -1,0 +1,13 @@
+---
+description: Commit after every meaningful code change (and on other TekaHub repos when touched)
+alwaysApply: true
+---
+
+# Commit after each modification
+
+- After completing a meaningful change (feature, fix, refactor), create a git commit on the current branch.
+- Do not wait for the user to ask again for commits in this project.
+- Never commit secrets (`.env`, private keys, credentials).
+- Use concise commit messages focused on why.
+- Do not push unless the user explicitly asks.
+- If you modify another TekaHub repository in the same session (Frontend, OmniSaleApi, etc.), commit in that repo too with the same rules.
