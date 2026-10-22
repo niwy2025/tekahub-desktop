@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, shell } from "electron";
+import { app, BrowserWindow, Menu, nativeImage, shell } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnvFiles } from "./load-env";
@@ -97,6 +97,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  // Caisse POS : pas de barre Fichier/Édition/Affichage (menu Electron par défaut).
+  Menu.setApplicationMenu(null);
+
   applyContentSecurityPolicy();
   getAppPaths();
   configureAutoUpdater(getWindow);
