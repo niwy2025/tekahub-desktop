@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { AppLocale, Product } from "@teka/shared";
-import { friendlyProductsError } from "../i18n/messages";
+import {
+  getCatalogSnapshot,
+  refreshCatalog,
+  subscribeCatalog,
+} from "../catalog/productCatalogStore";
 
 function normalizeText(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
@@ -17,63 +21,27 @@ export function filterProducts(products: Product[], search: string): Product[] {
   );
 }
 
-function isTransientNetworkError(err: unknown): boolean {
-  const raw = err instanceof Error ? err.message : String(err ?? "");
-  return /TEKA_NET:NETWORK_CHANGED|ERR_NETWORK_CHANGED|NETWORK_CHANGED/i.test(raw);
-}
-
 /**
- * Précharge le catalogue une fois (GET /api/produits), puis filtre en local.
- * Un seul appel — évite la boucle de pages qui multiplie les timeouts réseau.
+ * Lit le catalogue partagé (chargé au login, refresh ~10 min en arrière-plan).
+ * Ne refetch PAS à chaque visite de la caisse / écran produits.
  */
-export function useProducts(search: string, locale: AppLocale, enabled = true) {
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    if (!window.teka) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const load = () =>
-        window.teka!.listProducts({
-          type: "produit",
-          per_page: 200,
-          page: 1,
-          actif: true,
-        });
-
-      let list: Product[];
-      try {
-        list = await load();
-      } catch (first) {
-        // Changement Wi‑Fi / interface : un second essai après une courte pause.
-        if (!isTransientNetworkError(first)) throw first;
-        await new Promise((r) => window.setTimeout(r, 800));
-        list = await load();
-      }
-
-      setAllProducts(list);
-    } catch (err) {
-      setAllProducts([]);
-      setError(friendlyProductsError(locale, err));
-    } finally {
-      setLoading(false);
-    }
-  }, [locale]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    void reload();
-  }, [enabled, reload]);
+export function useProducts(search: string, _locale: AppLocale, _enabled = true) {
+  const catalog = useSyncExternalStore(subscribeCatalog, getCatalogSnapshot, getCatalogSnapshot);
 
   const products = useMemo(
-    () => filterProducts(allProducts, search),
-    [allProducts, search],
+    () => filterProducts(catalog.products, search),
+    [catalog.products, search],
   );
 
-  return { products, allProducts, loading, error, reload };
+  return {
+    products,
+    allProducts: catalog.products,
+    loading: catalog.loading && catalog.products.length === 0,
+    refreshing: catalog.refreshing,
+    error: catalog.error,
+    reload: () => void refreshCatalog({ silent: false }),
+    lastFetchedAt: catalog.lastFetchedAt,
+  };
 }
 
 /**

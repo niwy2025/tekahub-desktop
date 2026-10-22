@@ -5,6 +5,7 @@ import type {
   AuthUser,
   SessionInfo,
 } from "@teka/shared";
+import { clearCatalog, ensureCatalogLoaded } from "../catalog/productCatalogStore";
 import { normalizeLocale } from "../i18n/messages";
 
 export function useAuth() {
@@ -24,10 +25,14 @@ export function useAuth() {
 
     void window.teka
       .getSession()
-      .then(({ session: nextSession, user: nextUser, locale: nextLocale }) => {
+      .then(async ({ session: nextSession, user: nextUser, locale: nextLocale }) => {
+        const nextLocaleNorm = normalizeLocale(nextLocale.locale);
         setSession(nextSession);
         setUser(nextUser);
-        setLocaleState(normalizeLocale(nextLocale.locale));
+        setLocaleState(nextLocaleNorm);
+        if (nextUser) {
+          void ensureCatalogLoaded(nextLocaleNorm);
+        }
       })
       .catch((err) => {
         setBridgeError(err instanceof Error ? err.message : String(err));
@@ -39,6 +44,7 @@ export function useAuth() {
   useEffect(() => {
     if (!window.teka?.onSessionExpired) return;
     return window.teka.onSessionExpired(() => {
+      clearCatalog();
       setUser(null);
       setProfiles([]);
       setSession((prev) =>
@@ -63,12 +69,14 @@ export function useAuth() {
         apiConfigured: session?.apiConfigured ?? true,
         apiBaseUrl: session?.apiBaseUrl ?? null,
       });
+      void ensureCatalogLoaded(locale);
       return "ok" as const;
     },
-    [session?.apiBaseUrl, session?.apiConfigured],
+    [locale, session?.apiBaseUrl, session?.apiConfigured],
   );
 
   const logout = useCallback(async () => {
+    clearCatalog();
     await window.teka.logout();
     setUser(null);
     setProfiles([]);
