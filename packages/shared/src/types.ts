@@ -88,6 +88,7 @@ export const IpcChannels = {
   getLocale: "teka:get-locale",
   setLocale: "teka:set-locale",
   listProducts: "teka:list-products",
+  onSessionExpired: "teka:on-session-expired",
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];

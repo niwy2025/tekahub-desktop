@@ -52,6 +52,11 @@ const api = {
     ipcRenderer.invoke(IpcChannels.setLocale, locale),
   listProducts: (query?: ProductListQuery): Promise<Product[]> =>
     ipcRenderer.invoke(IpcChannels.listProducts, query),
+  onSessionExpired: (cb: () => void): (() => void) => {
+    const listener = (): void => cb();
+    ipcRenderer.on(IpcChannels.onSessionExpired, listener);
+    return () => ipcRenderer.removeListener(IpcChannels.onSessionExpired, listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("teka", api);

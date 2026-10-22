@@ -1,6 +1,13 @@
 import { net } from "electron";
 import { appConfig, assertApiConfigured } from "./config";
-import { getSessionToken } from "./session";
+import { clearSessionToken, getSessionToken } from "./session";
+
+/** Notifie le shell (IPC) quand le token est invalide — déclenche déconnexion UI. */
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
+}
 
 export function joinApiUrl(path: string): string {
   assertApiConfigured();
@@ -153,6 +160,23 @@ export async function apiRequest<T = unknown>(
       typeof (payload as { message: unknown }).message === "string"
         ? (payload as { message: string }).message
         : `Erreur API (${response.status})`;
+
+    const unauthenticated =
+      options.auth !== false &&
+      (response.status === 401 ||
+        response.status === 419 ||
+        /unauthenticated|token.*(invalid|expired)|unauthorized/i.test(message));
+
+    if (unauthenticated) {
+      clearSessionToken();
+      try {
+        unauthorizedHandler?.();
+      } catch {
+        // ignore handler errors
+      }
+      throw new ApiError("TEKA_AUTH:UNAUTHENTICATED", response.status, payload);
+    }
+
     throw new ApiError(message, response.status, payload);
   }
 

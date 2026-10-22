@@ -35,6 +35,23 @@ export function useAuth() {
       .finally(() => setBooting(false));
   }, []);
 
+  // Token invalide / Unauthenticated → retour écran login
+  useEffect(() => {
+    if (!window.teka?.onSessionExpired) return;
+    return window.teka.onSessionExpired(() => {
+      setUser(null);
+      setProfiles([]);
+      setSession((prev) =>
+        prev
+          ? { ...prev, authenticated: false }
+          : { authenticated: false, apiConfigured: false, apiBaseUrl: null },
+      );
+      void window.teka.logout().catch(() => {
+        // token déjà purgé côté main
+      });
+    });
+  }, []);
+
   const login = useCallback(
     async (loginId: string, password: string, userId?: string) => {
       const result = await window.teka.login(loginId, password, userId);

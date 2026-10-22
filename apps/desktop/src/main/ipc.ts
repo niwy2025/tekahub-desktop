@@ -14,7 +14,7 @@ import {
   type ShellUpdateState,
 } from "@teka/shared";
 import { fetchMe, getSessionInfo, login, logout, restoreSession } from "./auth";
-import { ApiError } from "./api-client";
+import { ApiError, setUnauthorizedHandler } from "./api-client";
 import { listProducts } from "./catalog";
 import { appConfig } from "./config";
 import { getAppLocale, getDeviceLocale, setAppLocale } from "./locale";
@@ -39,6 +39,13 @@ function toIpcError(err: unknown): Error {
 }
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
+  setUnauthorizedHandler(() => {
+    const win = getWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(IpcChannels.onSessionExpired);
+    }
+  });
+
   ipcMain.handle(IpcChannels.getAppInfo, (): AppInfo => ({
     name: appConfig.productName,
     version: app.getVersion(),

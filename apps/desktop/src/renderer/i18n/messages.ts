@@ -225,7 +225,11 @@ export function friendlyProductsError(locale: AppLocale, err: unknown): string {
     return t(locale, "productsErrorGeneric");
   }
 
-  // Message API métier déjà lisible (ex. Unauthenticated) — sinon générique.
+  if (/TEKA_AUTH:UNAUTHENTICATED|Unauthenticated/i.test(text)) {
+    return t(locale, "productsErrorGeneric");
+  }
+
+  // Message API métier déjà lisible — sinon générique.
   if (text && !/Error invoking|at async |node:|undici/i.test(text) && text.length < 160) {
     return text;
   }
