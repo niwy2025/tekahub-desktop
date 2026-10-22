@@ -13,6 +13,13 @@ import { formatPrice, useProducts } from "../hooks/useProducts";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
 import { t } from "../i18n/messages";
 
+/**
+ * Flux clavier thermique / scanner :
+ * 1. Recherche autofocus (scan → Entrée ajoute au panier, focus reste ici)
+ * 2. Tab → Valider
+ * 3. Tab → Vider
+ * La grille produits est hors tabulation (souris uniquement).
+ */
 export function PosScreen({
   locale,
   currency,
@@ -24,8 +31,9 @@ export function PosScreen({
 }) {
   const localRef = useRef<HTMLInputElement>(null);
   const searchRef = searchRefExternal ?? localRef;
+  const validateRef = useRef<HTMLButtonElement>(null);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   useAutoFocus(searchRef);
 
@@ -33,13 +41,13 @@ export function PosScreen({
 
   useEffect(() => {
     if (products.length === 0) {
-      setSelectedId(null);
+      setHighlightId(null);
       return;
     }
-    if (!products.some((p) => p.id === selectedId)) {
-      setSelectedId(products[0].id);
+    if (!products.some((p) => p.id === highlightId)) {
+      setHighlightId(products[0].id);
     }
-  }, [products, selectedId]);
+  }, [products, highlightId]);
 
   function addToCart(product: Product) {
     setCart((prev) => {
@@ -51,8 +59,22 @@ export function PosScreen({
       }
       return [...prev, { product, qty: 1 }];
     });
-    setSelectedId(product.id);
+    setHighlightId(product.id);
+    setQuery("");
     searchRef.current?.focus();
+  }
+
+  function findScanMatch(raw: string): Product | null {
+    const q = raw.trim().toLowerCase();
+    if (!q) return null;
+    const exact = products.find(
+      (p) =>
+        p.code_barre?.trim().toLowerCase() === q ||
+        p.sku?.trim().toLowerCase() === q,
+    );
+    if (exact) return exact;
+    if (products.length === 1) return products[0];
+    return null;
   }
 
   function increment(productId: string) {
@@ -79,6 +101,13 @@ export function PosScreen({
 
   function clearCart() {
     setCart([]);
+    searchRef.current?.focus();
+  }
+
+  function validateCart() {
+    if (cart.length === 0) return;
+    // Paiement / ticket : prochaine étape. Pour l’instant on confirme le focus scanner.
+    searchRef.current?.focus();
   }
 
   function onSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -87,34 +116,11 @@ export function PosScreen({
       setQuery("");
       return;
     }
-    if (
-      (e.key === "ArrowDown" || e.key === "ArrowRight") &&
-      products.length > 0
-    ) {
-      e.preventDefault();
-      const idx = Math.max(0, products.findIndex((p) => p.id === selectedId));
-      const step = e.key === "ArrowDown" ? estimateGridColumns() : 1;
-      const next = products[Math.min(products.length - 1, idx + step)];
-      setSelectedId(next.id);
-      return;
-    }
-    if (
-      (e.key === "ArrowUp" || e.key === "ArrowLeft") &&
-      products.length > 0
-    ) {
-      e.preventDefault();
-      const idx = Math.max(0, products.findIndex((p) => p.id === selectedId));
-      const step = e.key === "ArrowUp" ? estimateGridColumns() : 1;
-      const next = products[Math.max(0, idx - step)];
-      setSelectedId(next.id);
-      return;
-    }
     if (e.key === "Enter") {
       e.preventDefault();
-      const target =
-        products.find((p) => p.id === selectedId) ??
-        (products.length === 1 ? products[0] : null);
+      const target = findScanMatch(query);
       if (target) addToCart(target);
+      return;
     }
   }
 
@@ -136,6 +142,7 @@ export function PosScreen({
           <input
             ref={searchRef}
             type="search"
+            tabIndex={1}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onSearchKeyDown}
@@ -171,17 +178,17 @@ export function PosScreen({
               </p>
             ) : (
               products.map((product) => {
-                const active = product.id === selectedId;
+                const active = product.id === highlightId;
                 const inCart = cart.find((line) => line.product.id === product.id);
                 const price = product.prix_vente_ttc ?? product.prix_vente;
                 return (
                   <button
                     key={product.id}
                     type="button"
+                    tabIndex={-1}
                     role="option"
                     aria-selected={active}
                     onClick={() => addToCart(product)}
-                    onFocus={() => setSelectedId(product.id)}
                     style={{
                       ...productCard,
                       borderColor: inCart
@@ -235,6 +242,7 @@ export function PosScreen({
         </section>
 
         <CartPanel
+          ref={validateRef}
           locale={locale}
           currency={currency}
           cart={cart}
@@ -242,17 +250,11 @@ export function PosScreen({
           onDecrement={decrement}
           onRemove={removeLine}
           onClear={clearCart}
+          onValidate={validateCart}
         />
       </div>
     </div>
   );
-}
-
-/** Approx. columns for keyboard nav in auto-fill grid (minmax 160px). */
-function estimateGridColumns(): number {
-  const width = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const usable = Math.max(320, width - 520);
-  return Math.max(1, Math.floor(usable / 172));
 }
 
 const panel: CSSProperties = {

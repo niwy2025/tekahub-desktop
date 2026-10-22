@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { forwardRef, type CSSProperties } from "react";
 import type { AppLocale, Product } from "@teka/shared";
 import { formatPrice } from "../hooks/useProducts";
 import { t } from "../i18n/messages";
@@ -17,19 +17,29 @@ type Props = {
   onDecrement: (productId: string) => void;
   onRemove: (productId: string) => void;
   onClear: () => void;
+  onValidate: () => void;
 };
 
-export function CartPanel({
-  locale,
-  currency,
-  cart,
-  onIncrement,
-  onDecrement,
-  onRemove,
-  onClear,
-}: Props) {
+/**
+ * Tab order scanner POS : Valider (2) → Vider (3).
+ * Les +/- / × ligne restent souris uniquement (tabIndex -1).
+ */
+export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel(
+  {
+    locale,
+    currency,
+    cart,
+    onIncrement,
+    onDecrement,
+    onRemove,
+    onClear,
+    onValidate,
+  },
+  validateRef,
+) {
   const total = cart.reduce((sum, line) => sum + unitPrice(line.product) * line.qty, 0);
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
+  const canValidate = cart.length > 0;
 
   return (
     <aside style={panel} aria-label={t(locale, "posCart")}>
@@ -42,11 +52,6 @@ export function CartPanel({
             </p>
           ) : null}
         </div>
-        {cart.length > 0 ? (
-          <button type="button" onClick={onClear} style={ghostBtn}>
-            {t(locale, "posCartClear")}
-          </button>
-        ) : null}
       </div>
 
       {cart.length === 0 ? (
@@ -56,86 +61,114 @@ export function CartPanel({
           </p>
         </div>
       ) : (
-        <>
-          <ul style={list}>
-            {cart.map((line) => {
-              const unit = unitPrice(line.product);
-              const lineTotal = unit * line.qty;
-              return (
-                <li key={line.product.id} style={lineCard}>
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontWeight: 650,
-                        fontSize: 14,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={line.product.nom}
+        <ul style={list}>
+          {cart.map((line) => {
+            const unit = unitPrice(line.product);
+            const lineTotal = unit * line.qty;
+            return (
+              <li key={line.product.id} style={lineCard}>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 650,
+                      fontSize: 14,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={line.product.nom}
+                  >
+                    {line.product.nom}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--tek-ash)", marginTop: 4 }}>
+                    {formatPrice(unit, locale, currency)} × {line.qty}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                  <strong style={{ fontSize: 14 }}>
+                    {formatPrice(lineTotal, locale, currency)}
+                  </strong>
+                  <div style={qtyRow}>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={t(locale, "posCartDecrease")}
+                      onClick={() => onDecrement(line.product.id)}
+                      style={qtyBtn}
                     >
-                      {line.product.nom}
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--tek-ash)", marginTop: 4 }}>
-                      {formatPrice(unit, locale, currency)} × {line.qty}
-                    </div>
+                      −
+                    </button>
+                    <span style={qtyValue} aria-live="polite">
+                      {line.qty}
+                    </span>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={t(locale, "posCartIncrease")}
+                      onClick={() => onIncrement(line.product.id)}
+                      style={qtyBtn}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={t(locale, "posCartRemove")}
+                      onClick={() => onRemove(line.product.id)}
+                      style={removeBtn}
+                    >
+                      ×
+                    </button>
                   </div>
-
-                  <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                    <strong style={{ fontSize: 14 }}>
-                      {formatPrice(lineTotal, locale, currency)}
-                    </strong>
-                    <div style={qtyRow}>
-                      <button
-                        type="button"
-                        aria-label={t(locale, "posCartDecrease")}
-                        title="-"
-                        onClick={() => onDecrement(line.product.id)}
-                        style={qtyBtn}
-                      >
-                        −
-                      </button>
-                      <span style={qtyValue} aria-live="polite">
-                        {line.qty}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={t(locale, "posCartIncrease")}
-                        title="+"
-                        onClick={() => onIncrement(line.product.id)}
-                        style={qtyBtn}
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t(locale, "posCartRemove")}
-                        title={t(locale, "posCartRemove")}
-                        onClick={() => onRemove(line.product.id)}
-                        style={removeBtn}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div style={footer}>
-            <span style={{ color: "var(--tek-ash)", fontWeight: 650 }}>
-              {t(locale, "posCartTotal")}
-            </span>
-            <strong style={{ fontSize: 20 }}>
-              {formatPrice(total, locale, currency)}
-            </strong>
-          </div>
-        </>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
+
+      <div style={footer}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <span style={{ color: "var(--tek-ash)", fontWeight: 650 }}>
+            {t(locale, "posCartTotal")}
+          </span>
+          <strong style={{ fontSize: 20 }}>
+            {formatPrice(total, locale, currency)}
+          </strong>
+        </div>
+
+        <div style={actions}>
+          <button
+            ref={validateRef}
+            type="button"
+            tabIndex={2}
+            disabled={!canValidate}
+            onClick={onValidate}
+            style={{
+              ...validateBtn,
+              opacity: canValidate ? 1 : 0.5,
+            }}
+          >
+            {t(locale, "posCartValidate")}
+          </button>
+          <button
+            type="button"
+            tabIndex={3}
+            disabled={!canValidate}
+            onClick={onClear}
+            style={{
+              ...clearBtn,
+              opacity: canValidate ? 1 : 0.5,
+            }}
+          >
+            {t(locale, "posCartClear")}
+          </button>
+        </div>
+      </div>
     </aside>
   );
-}
+});
 
 const panel: CSSProperties = {
   background: "var(--tek-card)",
@@ -233,17 +266,33 @@ const footer: CSSProperties = {
   paddingTop: 14,
   borderTop: "1px solid var(--tek-line)",
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
+  flexDirection: "column",
   gap: 12,
 };
 
-const ghostBtn: CSSProperties = {
+const actions: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: 8,
+};
+
+const validateBtn: CSSProperties = {
+  border: "none",
+  borderRadius: 12,
+  padding: "14px 16px",
+  background: "var(--tek-yellow)",
+  color: "var(--tek-black)",
+  fontWeight: 800,
+  fontSize: 16,
+  boxShadow: "0 10px 28px rgba(244, 198, 15, 0.28)",
+};
+
+const clearBtn: CSSProperties = {
   border: "1px solid var(--tek-line)",
+  borderRadius: 12,
+  padding: "14px 16px",
   background: "transparent",
   color: "var(--tek-ash)",
-  padding: "6px 10px",
-  borderRadius: 999,
   fontWeight: 650,
-  fontSize: 12,
+  fontSize: 14,
 };
