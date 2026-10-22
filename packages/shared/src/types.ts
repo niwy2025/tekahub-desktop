@@ -88,6 +88,8 @@ export const IpcChannels = {
   getLocale: "teka:get-locale",
   setLocale: "teka:set-locale",
   listProducts: "teka:list-products",
+  checkSaleClient: "teka:check-sale-client",
+  createSale: "teka:create-sale",
   onSessionExpired: "teka:on-session-expired",
 } as const;
 
@@ -176,3 +178,54 @@ export interface ProductListQuery {
   /** Aligné front : true = actifs seulement */
   actif?: boolean;
 }
+
+/** Client CRM (champs utiles POS). */
+export interface Client {
+  id: string;
+  nom?: string | null;
+  telephone?: string | null;
+  email?: string | null;
+}
+
+export type SaleClientCheckPayload = {
+  client_id?: string | null;
+  client_nom?: string | null;
+  client_telephone?: string | null;
+  client_email?: string | null;
+};
+
+export type SaleClientCheckResponse = {
+  matched?: boolean;
+  matched_by?: "client_id" | "telephone" | "email" | string | null;
+  client?: Client | null;
+  normalized?: {
+    client_nom?: string | null;
+    client_telephone?: string | null;
+    client_email?: string | null;
+  } | null;
+};
+
+export type SaleLinePayload = {
+  produit_id: string;
+  quantite: number;
+  prix_unitaire?: number;
+};
+
+export type CreateSalePayload = {
+  client_id?: string | null;
+  client_nom?: string | null;
+  client_telephone?: string | null;
+  client_email?: string | null;
+  moyen_paiement: string;
+  statut: string;
+  montant_paye_initial?: number;
+  lignes: SaleLinePayload[];
+};
+
+export type Sale = {
+  id: string;
+  reference?: string | null;
+  montant_total?: number | string | null;
+  client_nom?: string | null;
+  client_telephone?: string | null;
+};

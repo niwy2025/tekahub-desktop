@@ -8,8 +8,12 @@ import {
   type LocaleInfo,
   type PackLocalState,
   type PackUpdateState,
+  type CreateSalePayload,
   type Product,
   type ProductListQuery,
+  type Sale,
+  type SaleClientCheckPayload,
+  type SaleClientCheckResponse,
   type SessionInfo,
   type ShellUpdateState,
 } from "@teka/shared";
@@ -52,6 +56,10 @@ const api = {
     ipcRenderer.invoke(IpcChannels.setLocale, locale),
   listProducts: (query?: ProductListQuery): Promise<Product[]> =>
     ipcRenderer.invoke(IpcChannels.listProducts, query),
+  checkSaleClient: (payload: SaleClientCheckPayload): Promise<SaleClientCheckResponse> =>
+    ipcRenderer.invoke(IpcChannels.checkSaleClient, payload),
+  createSale: (payload: CreateSalePayload): Promise<Sale> =>
+    ipcRenderer.invoke(IpcChannels.createSale, payload),
   onSessionExpired: (cb: () => void): (() => void) => {
     const listener = (): void => cb();
     ipcRenderer.on(IpcChannels.onSessionExpired, listener);

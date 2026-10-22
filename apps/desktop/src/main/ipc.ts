@@ -8,14 +8,19 @@ import {
   type LocaleInfo,
   type PackLocalState,
   type PackUpdateState,
+  type CreateSalePayload,
   type Product,
   type ProductListQuery,
+  type Sale,
+  type SaleClientCheckPayload,
+  type SaleClientCheckResponse,
   type SessionInfo,
   type ShellUpdateState,
 } from "@teka/shared";
 import { fetchMe, getSessionInfo, login, logout, restoreSession } from "./auth";
 import { ApiError, setUnauthorizedHandler } from "./api-client";
 import { listProducts } from "./catalog";
+import { checkSaleClient, createSale } from "./sales";
 import { appConfig } from "./config";
 import { getAppLocale, getDeviceLocale, setAppLocale } from "./locale";
 import { getAppPaths } from "./paths";
@@ -144,6 +149,28 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async (_e, query?: ProductListQuery): Promise<Product[]> => {
       try {
         return await listProducts(query ?? {});
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.checkSaleClient,
+    async (_e, payload: SaleClientCheckPayload): Promise<SaleClientCheckResponse> => {
+      try {
+        return await checkSaleClient(payload);
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.createSale,
+    async (_e, payload: CreateSalePayload): Promise<Sale> => {
+      try {
+        return await createSale(payload);
       } catch (err) {
         throw toIpcError(err);
       }

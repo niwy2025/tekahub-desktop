@@ -11,6 +11,7 @@ import {
 import type { AppLocale, Product } from "@teka/shared";
 import { CartPanel, type CartLine } from "../components/CartPanel";
 import { CartQtyDialog } from "../components/CartQtyDialog";
+import { SaleValidateModal } from "../components/SaleValidateModal";
 import { ProductListSkeleton } from "../components/Skeleton";
 import { formatPrice, useProducts } from "../hooks/useProducts";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
@@ -50,6 +51,7 @@ export function PosScreen({
   const [cartFocused, setCartFocused] = useState(false);
   const [cartLineId, setCartLineId] = useState<string | null>(null);
   const [qtyEditId, setQtyEditId] = useState<string | null>(null);
+  const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   useAutoFocus(searchRef);
 
@@ -220,6 +222,16 @@ export function PosScreen({
     setListFocused(false);
     setCartFocused(false);
     setQtyEditId(null);
+    setSaleModalOpen(true);
+  }
+
+  function onSaleSuccess() {
+    setSaleModalOpen(false);
+    setCart([]);
+    setCartLineId(null);
+    setQtyEditId(null);
+    setCartFocused(false);
+    setListFocused(false);
     searchRef.current?.focus();
   }
 
@@ -521,7 +533,7 @@ export function PosScreen({
         />
       </div>
 
-      {qtyEditLine ? (
+      {qtyEditLine && !saleModalOpen ? (
         <CartQtyDialog
           locale={locale}
           currency={currency}
@@ -548,6 +560,19 @@ export function PosScreen({
             setQtyEditId(null);
             focusCart();
           }}
+        />
+      ) : null}
+
+      {saleModalOpen ? (
+        <SaleValidateModal
+          locale={locale}
+          currency={currency}
+          cart={cart}
+          onClose={() => {
+            setSaleModalOpen(false);
+            searchRef.current?.focus();
+          }}
+          onSuccess={onSaleSuccess}
         />
       ) : null}
     </div>
