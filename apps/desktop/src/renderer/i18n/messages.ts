@@ -58,6 +58,13 @@ export const messages = {
     productsTitle: "Produits",
     productsEmpty: "Aucun produit trouvé",
     productsRetry: "Réessayer",
+    productsErrorNetworkChanged:
+      "La connexion réseau a changé. Vérifiez Internet puis réessayez.",
+    productsErrorOffline: "Pas de connexion Internet. Reconnectez-vous puis réessayez.",
+    productsErrorTimeout: "Le serveur met trop de temps à répondre. Réessayez dans un instant.",
+    productsErrorDns: "Impossible de joindre le serveur. Vérifiez votre connexion.",
+    productsErrorRefused: "Connexion au serveur refusée ou interrompue. Réessayez.",
+    productsErrorGeneric: "Impossible de charger les produits. Réessayez.",
     stock: "Stock",
     customersTitle: "Clients",
     historyTitle: "Historique",
@@ -133,6 +140,13 @@ export const messages = {
     productsTitle: "Products",
     productsEmpty: "No products found",
     productsRetry: "Retry",
+    productsErrorNetworkChanged:
+      "The network connection changed. Check Internet, then try again.",
+    productsErrorOffline: "No Internet connection. Reconnect, then try again.",
+    productsErrorTimeout: "The server is taking too long to respond. Try again shortly.",
+    productsErrorDns: "Could not reach the server. Check your connection.",
+    productsErrorRefused: "Connection to the server was refused or dropped. Try again.",
+    productsErrorGeneric: "Could not load products. Please try again.",
     stock: "Stock",
     customersTitle: "Customers",
     historyTitle: "History",
@@ -164,4 +178,44 @@ export function normalizeLocale(value?: string | null): AppLocale {
   const raw = (value ?? "").toLowerCase();
   if (raw.startsWith("en")) return "en";
   return "fr";
+}
+
+/** Transforme erreurs IPC / net::ERR_* en message utilisateur. */
+export function friendlyProductsError(locale: AppLocale, err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const text = raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, "");
+
+  const codeMatch = text.match(/TEKA_NET:([A-Z_]+)/i);
+  const code = (codeMatch?.[1] ?? "").toUpperCase();
+
+  if (code === "NETWORK_CHANGED" || /ERR_NETWORK_CHANGED|NETWORK_CHANGED/i.test(text)) {
+    return t(locale, "productsErrorNetworkChanged");
+  }
+  if (code === "OFFLINE" || /ERR_INTERNET_DISCONNECTED|ENETUNREACH/i.test(text)) {
+    return t(locale, "productsErrorOffline");
+  }
+  if (
+    code === "TIMEOUT" ||
+    /timeout|TIMED_OUT|ConnectTimeout|ETIMEDOUT|ERR_CONNECTION_TIMED_OUT/i.test(text)
+  ) {
+    return t(locale, "productsErrorTimeout");
+  }
+  if (code === "DNS" || /ENOTFOUND|ERR_NAME_NOT_RESOLVED|getaddrinfo/i.test(text)) {
+    return t(locale, "productsErrorDns");
+  }
+  if (
+    code === "REFUSED" ||
+    /ECONNREFUSED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED/i.test(text)
+  ) {
+    return t(locale, "productsErrorRefused");
+  }
+  if (code === "GENERIC" || /fetch failed|net::ERR_|TEKA_NET:/i.test(text)) {
+    return t(locale, "productsErrorGeneric");
+  }
+
+  // Message API métier déjà lisible (ex. Unauthenticated) — sinon générique.
+  if (text && !/Error invoking|at async |node:|undici/i.test(text) && text.length < 160) {
+    return text;
+  }
+  return t(locale, "productsErrorGeneric");
 }

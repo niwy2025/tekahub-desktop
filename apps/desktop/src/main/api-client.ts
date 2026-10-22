@@ -48,22 +48,56 @@ function buildQuery(
   return qs ? `?${qs}` : "";
 }
 
+/** Codes stables pour le renderer (i18n) — ne jamais exposer net::ERR_* à l’UI. */
+export type ApiNetworkCode =
+  | "NETWORK_CHANGED"
+  | "OFFLINE"
+  | "TIMEOUT"
+  | "DNS"
+  | "REFUSED"
+  | "GENERIC";
+
+export function classifyNetworkError(err: unknown): ApiNetworkCode {
+  const parts: string[] = [];
+  let cur: unknown = err;
+  for (let i = 0; i < 4 && cur; i++) {
+    if (cur instanceof Error) parts.push(cur.name, cur.message);
+    else parts.push(String(cur));
+    cur =
+      cur && typeof cur === "object" && "cause" in cur
+        ? (cur as { cause?: unknown }).cause
+        : undefined;
+  }
+  const text = parts.join(" ");
+
+  if (/ERR_NETWORK_CHANGED|NETWORK_CHANGED/i.test(text)) return "NETWORK_CHANGED";
+  if (/ERR_INTERNET_DISCONNECTED|ENETUNREACH|ERR_NETWORK_ACCESS_DENIED/i.test(text)) {
+    return "OFFLINE";
+  }
+  if (
+    /timeout|TIMED_OUT|UND_ERR_CONNECT|ConnectTimeout|ETIMEDOUT|AbortError|ERR_CONNECTION_TIMED_OUT/i.test(
+      text,
+    )
+  ) {
+    return "TIMEOUT";
+  }
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION/i.test(text)) {
+    return "DNS";
+  }
+  if (
+    /ECONNREFUSED|ECONNRESET|ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_ADDRESS_UNREACHABLE/i.test(
+      text,
+    )
+  ) {
+    return "REFUSED";
+  }
+  if (/fetch failed|net::ERR_/i.test(text)) return "GENERIC";
+  return "GENERIC";
+}
+
 function networkErrorMessage(err: unknown): string {
-  const root =
-    err && typeof err === "object" && "cause" in err
-      ? ((err as { cause?: unknown }).cause ?? err)
-      : err;
-  const text = root instanceof Error ? `${root.name} ${root.message}` : String(root);
-  if (/timeout|UND_ERR_CONNECT|ConnectTimeout|ETIMEDOUT|AbortError/i.test(text)) {
-    return "Impossible de joindre l’API (délai dépassé). Vérifiez la connexion puis réessayez.";
-  }
-  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(text)) {
-    return "Impossible de résoudre l’hôte API. Vérifiez API_BASE_URL et le DNS.";
-  }
-  if (/ECONNREFUSED|ECONNRESET|fetch failed/i.test(text)) {
-    return "Connexion à l’API refusée ou interrompue. Réessayez dans un instant.";
-  }
-  return err instanceof Error ? err.message : String(err);
+  // Préfixe TEKA_NET: pour que le renderer mappe en i18n même via le wrapper IPC.
+  return `TEKA_NET:${classifyNetworkError(err)}`;
 }
 
 /**

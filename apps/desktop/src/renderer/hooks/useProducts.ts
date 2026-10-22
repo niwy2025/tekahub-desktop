@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppLocale, Product } from "@teka/shared";
+import { friendlyProductsError } from "../i18n/messages";
 
 function normalizeText(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
@@ -16,11 +17,16 @@ export function filterProducts(products: Product[], search: string): Product[] {
   );
 }
 
+function isTransientNetworkError(err: unknown): boolean {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  return /TEKA_NET:NETWORK_CHANGED|ERR_NETWORK_CHANGED|NETWORK_CHANGED/i.test(raw);
+}
+
 /**
  * Précharge le catalogue une fois (GET /api/produits), puis filtre en local.
  * Un seul appel — évite la boucle de pages qui multiplie les timeouts réseau.
  */
-export function useProducts(search: string, enabled = true) {
+export function useProducts(search: string, locale: AppLocale, enabled = true) {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,20 +36,32 @@ export function useProducts(search: string, enabled = true) {
     setLoading(true);
     setError(null);
     try {
-      const list = await window.teka.listProducts({
-        type: "produit",
-        per_page: 200,
-        page: 1,
-        actif: true,
-      });
+      const load = () =>
+        window.teka!.listProducts({
+          type: "produit",
+          per_page: 200,
+          page: 1,
+          actif: true,
+        });
+
+      let list: Product[];
+      try {
+        list = await load();
+      } catch (first) {
+        // Changement Wi‑Fi / interface : un second essai après une courte pause.
+        if (!isTransientNetworkError(first)) throw first;
+        await new Promise((r) => window.setTimeout(r, 800));
+        list = await load();
+      }
+
       setAllProducts(list);
     } catch (err) {
       setAllProducts([]);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(friendlyProductsError(locale, err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!enabled) return;

@@ -12,7 +12,7 @@ export function ProductsScreen({
   currency?: string | null;
 }) {
   const [query, setQuery] = useState("");
-  const { products, loading, error, reload } = useProducts(query);
+  const { products, loading, error, reload } = useProducts(query, locale);
 
   return (
     <div style={{ padding: 28, display: "grid", gap: 16 }}>

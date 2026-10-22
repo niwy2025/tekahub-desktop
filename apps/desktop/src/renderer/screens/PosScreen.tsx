@@ -39,7 +39,7 @@ export function PosScreen({
   const [cart, setCart] = useState<CartLine[]>([]);
   useAutoFocus(searchRef);
 
-  const { products, allProducts, loading, error, reload } = useProducts(query);
+  const { products, allProducts, loading, error, reload } = useProducts(query, locale);
 
   useEffect(() => {
     if (products.length === 0) {
