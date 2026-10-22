@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -8,20 +7,18 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from "react";
-import type { AppLocale, Client, ClientStats } from "@teka/shared";
+import type { AppLocale, Client } from "@teka/shared";
 import {
   getClientsSnapshot,
   refreshClients,
   subscribeClients,
 } from "../catalog/clientCatalogStore";
-import { ClientListSkeleton, SaleDetailSkeleton } from "../components/Skeleton";
-import { formatPrice } from "../hooks/useProducts";
+import { ClientListSkeleton } from "../components/Skeleton";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
-import { friendlyNetworkError, t } from "../i18n/messages";
+import { t } from "../i18n/messages";
 
 type Props = {
   locale: AppLocale;
-  currency?: string | null;
 };
 
 function normalizeText(value?: string | null) {
@@ -38,29 +35,11 @@ function filterClients(clients: Client[], search: string): Client[] {
   );
 }
 
-function formatWhen(locale: AppLocale, value?: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-export function CustomersScreen({ locale, currency }: Props) {
+export function CustomersScreen({ locale }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const catalog = useSyncExternalStore(subscribeClients, getClientsSnapshot, getClientsSnapshot);
-
   const [selected, setSelected] = useState<Client | null>(null);
-  const [stats, setStats] = useState<ClientStats | null>(null);
-  const [detailClient, setDetailClient] = useState<Client | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
 
   const clients = useMemo(
     () => filterClients(catalog.clients, query),
@@ -73,40 +52,12 @@ export function CustomersScreen({ locale, currency }: Props) {
     searchRef.current?.focus();
   }, []);
 
-  const openDetail = useCallback(
-    async (client: Client) => {
-      setSelected(client);
-      setStats(null);
-      setDetailClient(client);
-      setDetailError(null);
-      setDetailLoading(true);
-      try {
-        if (typeof window.teka?.getClientStats !== "function") {
-          setDetailError(t(locale, "customersBridgeStale"));
-          return;
-        }
-        if (client.id.startsWith("local:")) {
-          setDetailClient(client);
-          setStats(null);
-          return;
-        }
-        const res = await window.teka.getClientStats(client.id);
-        setDetailClient(res.client ?? client);
-        setStats(res.stats);
-      } catch (err) {
-        setDetailError(friendlyNetworkError(locale, err, "customersStatsError"));
-      } finally {
-        setDetailLoading(false);
-      }
-    },
-    [locale],
-  );
+  function openDetail(client: Client) {
+    setSelected(client);
+  }
 
   function closeDetail() {
     setSelected(null);
-    setStats(null);
-    setDetailClient(null);
-    setDetailError(null);
     searchRef.current?.focus();
   }
 
@@ -127,7 +78,7 @@ export function CustomersScreen({ locale, currency }: Props) {
     }
     if (e.key === "Enter" && selected) {
       e.preventDefault();
-      void openDetail(selected);
+      openDetail(selected);
     }
   }
 
@@ -224,7 +175,7 @@ export function CustomersScreen({ locale, currency }: Props) {
                       key={client.id}
                       role="option"
                       aria-selected={active}
-                      onClick={() => void openDetail(client)}
+                      onClick={() => openDetail(client)}
                       style={{
                         ...row,
                         background: active ? "rgba(244, 198, 15, 0.22)" : undefined,
@@ -247,15 +198,7 @@ export function CustomersScreen({ locale, currency }: Props) {
       )}
 
       {selected ? (
-        <ClientDetailModal
-          locale={locale}
-          currency={currency}
-          loading={detailLoading}
-          error={detailError}
-          client={detailClient ?? selected}
-          stats={stats}
-          onClose={closeDetail}
-        />
+        <ClientDetailModal locale={locale} client={selected} onClose={closeDetail} />
       ) : null}
     </div>
   );
@@ -263,19 +206,11 @@ export function CustomersScreen({ locale, currency }: Props) {
 
 function ClientDetailModal({
   locale,
-  currency,
-  loading,
-  error,
   client,
-  stats,
   onClose,
 }: {
   locale: AppLocale;
-  currency?: string | null;
-  loading: boolean;
-  error: string | null;
   client: Client;
-  stats: ClientStats | null;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -316,75 +251,23 @@ function ClientDetailModal({
           </button>
         </header>
 
-        {loading ? (
-          <SaleDetailSkeleton />
-        ) : (
-          <>
-            <div style={metaGrid}>
-              <Meta
-                label={t(locale, "customersColPhone")}
-                value={client.telephone?.trim() || "—"}
-              />
-              <Meta label={t(locale, "customersColEmail")} value={client.email?.trim() || "—"} />
-              <Meta
-                label={t(locale, "customersColAddress")}
-                value={client.adresse?.trim() || "—"}
-              />
-            </div>
+        <div style={metaGrid}>
+          <Meta
+            label={t(locale, "customersColPhone")}
+            value={client.telephone?.trim() || "—"}
+          />
+          <Meta label={t(locale, "customersColEmail")} value={client.email?.trim() || "—"} />
+          <Meta
+            label={t(locale, "customersColAddress")}
+            value={client.adresse?.trim() || "—"}
+          />
+        </div>
 
-            {error ? (
-              <p style={{ margin: "14px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
-                {error}
-              </p>
-            ) : null}
-
-            {stats ? (
-              <>
-                <h3 style={{ margin: "18px 0 10px", fontSize: 14 }}>
-                  {t(locale, "customersStatsTitle")}
-                </h3>
-                <div style={metaGrid}>
-                  <Meta
-                    label={t(locale, "customersStatsSales")}
-                    value={String(stats.ventes_count)}
-                  />
-                  <Meta
-                    label={t(locale, "customersStatsRevenue")}
-                    value={formatPrice(stats.montant_ventes, locale, currency)}
-                  />
-                  <Meta
-                    label={t(locale, "customersStatsPaid")}
-                    value={formatPrice(stats.montant_paye, locale, currency)}
-                  />
-                  <Meta
-                    label={t(locale, "customersStatsRemaining")}
-                    value={formatPrice(stats.montant_restant, locale, currency)}
-                  />
-                  <Meta
-                    label={t(locale, "customersStatsLastSale")}
-                    value={formatWhen(locale, stats.derniere_vente_at)}
-                  />
-                  <Meta
-                    label={t(locale, "customersStatsPoints")}
-                    value={String(stats.solde_points_fidelite ?? 0)}
-                  />
-                </div>
-              </>
-            ) : !error && !loading ? (
-              <p style={{ margin: "14px 0 0", fontSize: 13, color: "var(--tek-ash)" }}>
-                {client.id.startsWith("local:")
-                  ? t(locale, "customersLocalOnly")
-                  : t(locale, "customersStatsUnavailable")}
-              </p>
-            ) : null}
-
-            <div style={{ marginTop: 18 }}>
-              <button type="button" onClick={onClose} style={cancelBtn}>
-                {t(locale, "customersDetailClose")}
-              </button>
-            </div>
-          </>
-        )}
+        <div style={{ marginTop: 18 }}>
+          <button type="button" onClick={onClose} style={cancelBtn}>
+            {t(locale, "customersDetailClose")}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -526,8 +409,8 @@ const backdrop: CSSProperties = {
 };
 
 const dialog: CSSProperties = {
-  width: "min(560px, 100%)",
-  maxHeight: "min(90vh, 720px)",
+  width: "min(480px, 100%)",
+  maxHeight: "min(90vh, 560px)",
   overflow: "auto",
   background: "var(--tek-card)",
   borderRadius: 20,

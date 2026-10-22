@@ -89,7 +89,6 @@ export const IpcChannels = {
   setLocale: "teka:set-locale",
   listProducts: "teka:list-products",
   listClients: "teka:list-clients",
-  getClientStats: "teka:get-client-stats",
   checkSaleClient: "teka:check-sale-client",
   createSale: "teka:create-sale",
   listSaleHistory: "teka:list-sale-history",
@@ -198,20 +197,6 @@ export interface Client {
   solde_points_fidelite?: number | string | null;
   actif?: boolean | null;
 }
-
-export type ClientStats = {
-  ventes_count: number;
-  montant_ventes: number | string;
-  montant_paye: number | string;
-  montant_restant: number | string;
-  derniere_vente_at?: string | null;
-  solde_points_fidelite: number;
-};
-
-export type ClientStatsResponse = {
-  client: Client;
-  stats: ClientStats;
-};
 
 export type SaleClientCheckPayload = {
   client_id?: string | null;

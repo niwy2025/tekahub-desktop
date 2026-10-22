@@ -1,4 +1,4 @@
-import type { Client, ClientStatsResponse } from "@teka/shared";
+import type { Client } from "@teka/shared";
 import { apiRequest } from "./api-client";
 
 function asClientArray(payload: unknown): Client[] {
@@ -35,10 +35,4 @@ export async function listAllClients(): Promise<Client[]> {
   }
 
   return all;
-}
-
-export async function getClientStats(clientId: string): Promise<ClientStatsResponse> {
-  return apiRequest<ClientStatsResponse>(`/api/clients/${clientId}/stats`, {
-    method: "GET",
-  });
 }

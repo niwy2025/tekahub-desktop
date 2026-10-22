@@ -150,7 +150,7 @@ export function App() {
       content = <ProductsScreen locale={locale} currency={currency} />;
       break;
     case "customers":
-      content = <CustomersScreen locale={locale} currency={currency} />;
+      content = <CustomersScreen locale={locale} />;
       break;
     case "history":
       content = (
