@@ -14,7 +14,7 @@ import { PosScreen, type PosScreenHandle } from "./screens/PosScreen";
 import { ProductsScreen } from "./screens/ProductsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { AppShell } from "./shell/AppShell";
-import { ShortcutHelp } from "./shell/ShortcutHelp";
+import { ShortcutsDocsScreen } from "./screens/ShortcutsDocsScreen";
 
 export function App() {
   const {
@@ -61,6 +61,7 @@ export function App() {
     };
   }, [logout]);
 
+  // Sur la page doc, seul Esc/F2 (géré par ShortcutsDocsScreen) doit fermer.
   useGlobalShortcuts(shortcutHandlers, Boolean(user) && !helpOpen);
 
   const onNavigate = useCallback((next: AppModule) => {
@@ -141,23 +142,23 @@ export function App() {
   }
 
   return (
-    <>
-      <AppShell
-        locale={locale}
-        onLocaleChange={(next) => void setLocale(next)}
-        user={user}
-        module={module}
-        onNavigate={onNavigate}
-        onLogout={() => void logout()}
-        onOpenHelp={() => setHelpOpen(true)}
-      >
-        {content}
-      </AppShell>
-      <ShortcutHelp
-        locale={locale}
-        open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-      />
-    </>
+    <AppShell
+      locale={locale}
+      onLocaleChange={(next) => void setLocale(next)}
+      user={user}
+      module={module}
+      onNavigate={(next) => {
+        setHelpOpen(false);
+        onNavigate(next);
+      }}
+      onLogout={() => void logout()}
+      onOpenHelp={() => setHelpOpen(true)}
+    >
+      {helpOpen ? (
+        <ShortcutsDocsScreen locale={locale} onClose={() => setHelpOpen(false)} />
+      ) : (
+        content
+      )}
+    </AppShell>
   );
 }
