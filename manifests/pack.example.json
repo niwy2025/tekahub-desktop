@@ -1,0 +1,11 @@
+{
+  "id": "core-ui",
+  "version": "1.0.0",
+  "url": "core-ui/core-ui-1.0.0.zip",
+  "sha256": "REPLACE_AFTER_generate-manifest",
+  "signature": "REPLACE_AFTER_generate-manifest",
+  "entrypoint": "index.html",
+  "minShellVersion": "0.1.0",
+  "changelog": "Pack UI initial",
+  "publishedAt": "2026-10-22T00:00:00.000Z"
+}

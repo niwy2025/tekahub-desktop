@@ -1,0 +1,8 @@
+{
+  "version": "0.1.1",
+  "url": "https://cdn.example.com/teka-desktop/TekaHub-0.1.1-x64.AppImage",
+  "sha256": "REPLACE_WITH_SHA256_OF_ARTIFACT",
+  "signature": "OPTIONAL_EXTRA_APP_SIGNATURE",
+  "changelog": "- Fix auto-update\n- Improve pack rollback",
+  "publishedAt": "2026-10-22T00:00:00.000Z"
+}

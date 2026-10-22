@@ -1,0 +1,34 @@
+# dependencies
+node_modules
+.pnp
+.pnp.*
+
+# build
+dist
+dist-packs
+out
+release
+*.tsbuildinfo
+
+# electron-builder
+apps/desktop/dist
+apps/desktop/out
+apps/desktop/release
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!keys/.gitkeep
+keys/private*
+keys/*.secret*
+
+# misc
+.DS_Store
+coverage
+*.log
+.turbo
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,28 @@
+{
+  "name": "teka-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TekaHub desktop shell — Electron + packs dynamiques",
+  "scripts": {
+    "dev": "npm run dev -w @teka/desktop",
+    "build": "npm run build -w @teka/shared && npm run build -w @teka/desktop",
+    "build:shared": "npm run build -w @teka/shared",
+    "typecheck": "npm run typecheck -w @teka/shared && npm run typecheck -w @teka/desktop",
+    "pack": "npm run pack -w @teka/desktop",
+    "dist": "npm run dist -w @teka/desktop",
+    "dist:linux": "npm run dist:linux -w @teka/desktop",
+    "dist:win": "npm run dist:win -w @teka/desktop",
+    "dist:mac": "npm run dist:mac -w @teka/desktop",
+    "generate:keys": "node scripts/generate-keys.mjs",
+    "generate:manifest": "node scripts/generate-manifest.mjs",
+    "publish:pack": "node scripts/publish-pack.mjs"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.9.2"
+}
