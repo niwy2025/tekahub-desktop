@@ -34,6 +34,19 @@ function unitPrice(line: CartLine): number {
   return Number(line.product.prix_vente_ttc ?? line.product.prix_vente ?? 0) || 0;
 }
 
+function parseAmount(raw: string): number {
+  const normalized = raw.trim().replace(/\s/g, "").replace(",", ".");
+  if (!normalized) return 0;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatAmountInput(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  // Entrée clavier simple (pas de séparateur milliers)
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
 /** Partie locale du numéro (sans indicatif 243 / 0). */
 function toLocalPhone(raw: string): string {
   let digits = raw.replace(/\D+/g, "");
@@ -64,6 +77,8 @@ export function SaleValidateModal({
   const phoneRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const paidRef = useRef<HTMLInputElement>(null);
+  const payConfirmRef = useRef<HTMLButtonElement>(null);
   const clientsState = useSyncExternalStore(
     subscribeClients,
     getClientsSnapshot,
@@ -75,28 +90,44 @@ export function SaleValidateModal({
   const [clientId, setClientId] = useState<string | null>(null);
   const [status, setStatus] = useState<ClientStatus>("idle");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paidInput, setPaidInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const total = cart.reduce((sum, line) => sum + unitPrice(line) * line.qty, 0);
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
   const fullPhone = toFullPhone(phoneLocal);
+  const paidAmount = parseAmount(paidInput);
+  const changeAmount = Math.max(0, Math.round((paidAmount - total) * 100) / 100);
+  const remainingAmount = Math.max(0, Math.round((total - paidAmount) * 100) / 100);
 
   useEffect(() => {
     phoneRef.current?.focus();
   }, []);
 
   useEffect(() => {
+    if (!paymentOpen) return;
+    requestAnimationFrame(() => {
+      paidRef.current?.focus();
+      paidRef.current?.select();
+    });
+  }, [paymentOpen]);
+
+  useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape" && !submitting) {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
+      if (e.key !== "Escape" || submitting) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (paymentOpen) {
+        setPaymentOpen(false);
+        return;
       }
+      onClose();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose, submitting]);
+  }, [onClose, submitting, paymentOpen]);
 
   function runClientCheck(localRaw: string) {
     const local = toLocalPhone(localRaw);
@@ -158,10 +189,8 @@ export function SaleValidateModal({
     phoneRef.current?.focus();
   }
 
-  async function submitSale(e?: FormEvent) {
-    e?.preventDefault();
-    if (submitting || cart.length === 0) return;
-
+  function openPaymentStep() {
+    if (cart.length === 0) return;
     const telephone = fullPhone;
     const nom = name.trim();
 
@@ -171,12 +200,31 @@ export function SaleValidateModal({
       return;
     }
 
+    setSubmitError(null);
+    setPaidInput(formatAmountInput(total));
+    setPaymentOpen(true);
+  }
+
+  async function submitSale(e?: FormEvent) {
+    e?.preventDefault();
+    if (submitting || cart.length === 0) return;
+
+    if (paidAmount + 0.0001 < total) {
+      setSubmitError(t(locale, "salePaidTooLow"));
+      paidRef.current?.focus();
+      return;
+    }
+
+    const telephone = fullPhone;
+    const nom = name.trim();
+
     setSubmitting(true);
     setSubmitError(null);
 
     const payload: CreateSalePayload = {
       moyen_paiement: "especes",
       statut: "validee",
+      montant_paye_initial: paidAmount,
       lignes: cart.map((line) => ({
         produit_id: line.product.id,
         quantite: line.qty,
@@ -392,13 +440,13 @@ export function SaleValidateModal({
             ref={confirmRef}
             type="button"
             disabled={submitting || cart.length === 0}
-            onClick={() => void submitSale()}
+            onClick={openPaymentStep}
             style={{
               ...confirmBtn,
               opacity: submitting ? 0.7 : 1,
             }}
           >
-            {submitting ? t(locale, "saleSubmitting") : t(locale, "saleConfirm")}
+            {t(locale, "saleConfirm")}
           </button>
           <button
             type="button"
@@ -410,6 +458,107 @@ export function SaleValidateModal({
             {t(locale, "posQtyCancel")}
           </button>
         </div>
+
+        {paymentOpen ? (
+          <div
+            role="presentation"
+            style={payBackdrop}
+            onClick={() => !submitting && setPaymentOpen(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sale-pay-title"
+              style={payDialog}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={eyebrow}>{t(locale, "salePaymentCash")}</p>
+              <h3 id="sale-pay-title" style={{ margin: "4px 0 0", fontSize: 20 }}>
+                {t(locale, "salePaidTitle")}
+              </h3>
+
+              <div style={payTotalBox}>
+                <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
+                  {t(locale, "posCartTotal")}
+                </span>
+                <strong style={{ fontSize: 22 }}>
+                  {formatPrice(total, locale, currency)}
+                </strong>
+              </div>
+
+              <label style={payLabel}>
+                {t(locale, "salePaidLabel")}
+                <input
+                  ref={paidRef}
+                  type="text"
+                  inputMode="decimal"
+                  value={paidInput}
+                  disabled={submitting}
+                  onChange={(e) => {
+                    setPaidInput(e.target.value);
+                    setSubmitError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void submitSale();
+                    }
+                  }}
+                  style={payInput}
+                />
+              </label>
+
+              <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
+                {changeAmount > 0 ? (
+                  <>
+                    <span>{t(locale, "saleChangeLabel")}</span>
+                    <strong>{formatPrice(changeAmount, locale, currency)}</strong>
+                  </>
+                ) : remainingAmount > 0.005 ? (
+                  <>
+                    <span>{t(locale, "saleRemainingLabel")}</span>
+                    <strong>{formatPrice(remainingAmount, locale, currency)}</strong>
+                  </>
+                ) : (
+                  <>
+                    <span>{t(locale, "saleChangeLabel")}</span>
+                    <strong>{formatPrice(0, locale, currency)}</strong>
+                  </>
+                )}
+              </div>
+
+              {submitError ? (
+                <p style={{ margin: "12px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
+                  {submitError}
+                </p>
+              ) : null}
+
+              <div style={{ ...actions, marginTop: 16 }}>
+                <button
+                  ref={payConfirmRef}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void submitSale()}
+                  style={{
+                    ...confirmBtn,
+                    opacity: submitting ? 0.7 : 1,
+                  }}
+                >
+                  {submitting ? t(locale, "saleSubmitting") : t(locale, "salePaidConfirm")}
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  disabled={submitting}
+                  onClick={() => setPaymentOpen(false)}
+                  style={cancelBtn}
+                >
+                  {t(locale, "posQtyCancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -426,6 +575,7 @@ const backdrop: CSSProperties = {
 };
 
 const dialog: CSSProperties = {
+  position: "relative",
   width: "min(960px, 100%)",
   maxHeight: "min(90vh, 820px)",
   overflow: "auto",
@@ -648,3 +798,77 @@ const cancelBtn: CSSProperties = {
   fontSize: 14,
   cursor: "pointer",
 };
+
+const payBackdrop: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  zIndex: 2,
+  background: "rgba(12, 12, 12, 0.4)",
+  display: "grid",
+  placeItems: "center",
+  padding: 16,
+  borderRadius: 20,
+};
+
+const payDialog: CSSProperties = {
+  width: "min(380px, 100%)",
+  background: "var(--tek-card)",
+  borderRadius: 16,
+  border: "1px solid var(--tek-line)",
+  boxShadow: "var(--tek-shadow)",
+  padding: 20,
+};
+
+const payTotalBox: CSSProperties = {
+  marginTop: 14,
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid var(--tek-line)",
+  background: "var(--tek-bg)",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+};
+
+const payLabel: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  marginTop: 14,
+  fontSize: 12,
+  fontWeight: 650,
+  color: "var(--tek-ash)",
+};
+
+const payInput: CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--tek-line)",
+  borderRadius: 12,
+  padding: "14px 16px",
+  fontSize: 22,
+  fontWeight: 800,
+  fontVariantNumeric: "tabular-nums",
+  background: "var(--tek-bg)",
+  color: "var(--tek-ink)",
+};
+
+function changeBox(hasChange: boolean, hasRemaining: boolean): CSSProperties {
+  const bg = hasChange
+    ? "rgba(22, 163, 74, 0.12)"
+    : hasRemaining
+      ? "rgba(244, 198, 15, 0.22)"
+      : "var(--tek-bg)";
+  return {
+    marginTop: 12,
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: "1px solid var(--tek-line)",
+    background: bg,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    fontSize: 14,
+    fontWeight: 650,
+  };
+}
