@@ -227,10 +227,12 @@ export function SaleValidateModal({
     setSubmitting(true);
     setSubmitError(null);
 
+    // L’API refuse montant_paye_initial > total.
+    // Les espèces reçues / monnaie à rendre restent un calcul caissier local.
     const payload: CreateSalePayload = {
       moyen_paiement: "especes",
       statut: "validee",
-      montant_paye_initial: paidAmount,
+      montant_paye_initial: Math.min(paidAmount, total),
       lignes: cart.map((line) => ({
         produit_id: line.product.id,
         quantite: line.qty,
@@ -534,6 +536,9 @@ export function SaleValidateModal({
                   </>
                 )}
               </div>
+              {changeAmount > 0 ? (
+                <p style={payHint}>{t(locale, "saleChangeHint")}</p>
+              ) : null}
 
               {submitError ? (
                 <p style={{ margin: "12px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
@@ -879,3 +884,10 @@ function changeBox(hasChange: boolean, hasRemaining: boolean): CSSProperties {
     fontWeight: 650,
   };
 }
+
+const payHint: CSSProperties = {
+  margin: "8px 0 0",
+  fontSize: 12,
+  lineHeight: 1.4,
+  color: "var(--tek-ash)",
+};
