@@ -331,22 +331,13 @@ export function PosScreen({
     }
     if (e.key === "Enter") {
       e.preventDefault();
+      e.stopPropagation();
       if (cartLineId) openQtyEdit(cartLineId);
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       if (cartLineId) removeLine(cartLineId);
-      return;
-    }
-    if (e.key === "-" || e.key === "ArrowLeft") {
-      e.preventDefault();
-      if (cartLineId) openQtyEdit(cartLineId);
-      return;
-    }
-    if (e.key === "+" || e.key === "ArrowRight") {
-      e.preventDefault();
-      if (cartLineId) openQtyEdit(cartLineId);
     }
   }
 

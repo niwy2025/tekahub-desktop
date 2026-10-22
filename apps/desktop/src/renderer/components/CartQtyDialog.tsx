@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { AppLocale } from "@teka/shared";
 import { formatPrice } from "../hooks/useProducts";
 import { t } from "../i18n/messages";
@@ -14,7 +14,8 @@ type Props = {
 };
 
 /**
- * Modal quantité panier — flèches / +− pour ajuster, Entrée valider, Esc annuler, Suppr retirer.
+ * Modal quantité panier — un seul listener window (capture) pour éviter
+ * les multiplications (backdrop + dialog + bouton focus).
  */
 export function CartQtyDialog({
   locale,
@@ -25,9 +26,11 @@ export function CartQtyDialog({
   onClose,
 }: Props) {
   const [qty, setQty] = useState(line.qty);
+  const qtyRef = useRef(qty);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
   const unit = Number(line.product.prix_vente_ttc ?? line.product.prix_vente ?? 0) || 0;
+
+  qtyRef.current = qty;
 
   useEffect(() => {
     setQty(line.qty);
@@ -35,50 +38,70 @@ export function CartQtyDialog({
 
   useEffect(() => {
     dialogRef.current?.focus();
-    confirmRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    // Ignore les key-repeat de la touche qui vient d’ouvrir le modal.
+    const openedAt = Date.now();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isQtyKey =
+        e.key === "ArrowUp" ||
+        e.key === "ArrowRight" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "+" ||
+        e.key === "-" ||
+        e.key === "Add" ||
+        e.key === "Subtract";
+
+      if (isQtyKey && (e.repeat || Date.now() - openedAt < 120)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        onConfirm(qtyRef.current);
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        e.stopPropagation();
+        onRemove();
+        return;
+      }
+      if (e.key === "ArrowUp" || e.key === "ArrowRight" || e.key === "+" || e.key === "Add") {
+        e.preventDefault();
+        e.stopPropagation();
+        setQty((prev) => Math.max(1, prev + 1));
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "-" || e.key === "Subtract") {
+        e.preventDefault();
+        e.stopPropagation();
+        setQty((prev) => Math.max(1, prev - 1));
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [onClose, onConfirm, onRemove]);
 
   function bump(delta: number) {
     setQty((prev) => Math.max(1, prev + delta));
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      onConfirm(qty);
-      return;
-    }
-    if (e.key === "Delete" || e.key === "Backspace") {
-      e.preventDefault();
-      e.stopPropagation();
-      onRemove();
-      return;
-    }
-    if (e.key === "ArrowUp" || e.key === "ArrowRight" || e.key === "+") {
-      e.preventDefault();
-      bump(1);
-      return;
-    }
-    if (e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "-") {
-      e.preventDefault();
-      bump(-1);
-    }
-  }
-
   return (
-    <div
-      role="presentation"
-      style={backdrop}
-      onClick={onClose}
-      onKeyDown={onKeyDown}
-    >
+    <div role="presentation" style={backdrop} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -87,7 +110,6 @@ export function CartQtyDialog({
         tabIndex={-1}
         style={dialog}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={onKeyDown}
       >
         <p style={eyebrow}>{t(locale, "posQtyEdit")}</p>
         <h2 id="pos-qty-title" style={{ margin: "4px 0 0", fontSize: 20, lineHeight: 1.3 }}>
@@ -115,7 +137,7 @@ export function CartQtyDialog({
         <p style={hint}>{t(locale, "posQtyHint")}</p>
 
         <div style={actions}>
-          <button ref={confirmRef} type="button" style={confirmBtn} onClick={() => onConfirm(qty)}>
+          <button type="button" tabIndex={-1} style={confirmBtn} onClick={() => onConfirm(qty)}>
             {t(locale, "posQtyConfirm")}
           </button>
           <button type="button" tabIndex={-1} style={removeBtn} onClick={onRemove}>
