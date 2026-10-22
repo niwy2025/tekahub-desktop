@@ -5,10 +5,10 @@
   "description": "TekaHub Electron shell",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "preview": "electron-vite preview",
+    "preview": "ELECTRON_DISABLE_SANDBOX=1 electron-vite preview",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "dist:linux": "npm run build && electron-builder --linux AppImage",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@teka/shared": "*",
+    "dotenv": "^18.0.8",
     "electron-updater": "^6.3.9",
     "extract-zip": "^2.0.1"
   },

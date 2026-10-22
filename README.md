@@ -46,10 +46,28 @@ packs/<packId>/
 ```bash
 cd teka-desktop
 cp .env.example .env
+# Éditer API_BASE_URL (ex: https://api-tekahub.niwytech.cloud)
 npm install
 npm run build:shared
 npm run dev
 ```
+
+Sous Linux, `npm run dev` désactive le sandbox Chromium (`ELECTRON_DISABLE_SANDBOX=1`) — requis quand `chrome-sandbox` n’est pas en setuid root. Alternative (une fois, avec sudo) :
+
+```bash
+sudo chown root:root node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+```
+
+### API & login
+
+Le renderer ne parle **pas** directement à Laravel : le process main appelle `API_BASE_URL` (login, me, logout) et stocke le token chiffré via `safeStorage` dans `userData/config/`.
+
+```env
+API_BASE_URL=https://api-tekahub.niwytech.cloud
+```
+
+Sans cette variable, l’écran de connexion affiche un message de configuration.
 
 ## Scripts utiles
 

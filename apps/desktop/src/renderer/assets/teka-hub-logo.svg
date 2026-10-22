@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Calque_1" data-name="Calque 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 652.59 453.77">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: url(#Dégradé_sans_nom_8-2);
+      }
+
+      .cls-2 {
+        fill: #f39200;
+      }
+
+      .cls-3 {
+        letter-spacing: 0em;
+      }
+
+      .cls-3, .cls-4, .cls-5 {
+        fill: #3c3c3b;
+      }
+
+      .cls-5 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-6 {
+        font-family: Montserrat-Bold, Montserrat;
+        font-size: 120.52px;
+        font-variation-settings: 'wght' 700;
+      }
+
+      .cls-7 {
+        fill: url(#Dégradé_sans_nom_8);
+      }
+
+      .cls-8 {
+        letter-spacing: 0em;
+      }
+    </style>
+    <linearGradient id="Dégradé_sans_nom_8" data-name="Dégradé sans nom 8" x1="329.26" y1="168.95" x2="452.34" y2="168.95" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f6ce46"/>
+      <stop offset="1" stop-color="#e8821c"/>
+    </linearGradient>
+    <linearGradient id="Dégradé_sans_nom_8-2" data-name="Dégradé sans nom 8" x1="405.61" y1="31.34" y2="31.34" xlink:href="#Dégradé_sans_nom_8"/>
+  </defs>
+  <g>
+    <path class="cls-4" d="M195.92,0l170.95,82.62-54.7,26.21-1.14,30.2-105.98-55.09c-5.61-2.91-9.12-8.71-9.12-15.03V0Z"/>
+    <path class="cls-4" d="M260.88,132.77l49.57,25.64v102.57l-43.88-24.32c-5.25-2.91-8.44-8.51-8.27-14.5l2.57-89.38Z"/>
+    <path class="cls-7" d="M329.26,268.39l46-21.86c7.05-3.35,11.55-10.47,11.55-18.28v-63l55.49-22.2c6.06-2.42,10.04-8.3,10.04-14.82v-58.71l-123.08,50.14v148.72Z"/>
+    <rect class="cls-1" x="405.61" y="7.98" width="46.73" height="46.73" rx="8.26" ry="8.26"/>
+  </g>
+  <text class="cls-6" transform="translate(0 399.17)"><tspan class="cls-4" x="0" y="0">TE</tspan><tspan class="cls-5" x="155.34" y="0">K</tspan><tspan class="cls-3" x="241.63" y="0">A</tspan><tspan class="cls-8" x="333.95" y="0"> </tspan><tspan class="cls-2" x="368.05" y="0">HUB</tspan></text>
+</svg>

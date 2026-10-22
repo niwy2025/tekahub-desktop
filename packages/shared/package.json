@@ -8,7 +8,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./crypto": {
+      "types": "./dist/crypto.d.ts",
+      "import": "./dist/crypto.js",
+      "default": "./dist/crypto.js"
     }
   },
   "scripts": {

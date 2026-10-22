@@ -81,9 +81,18 @@ export const IpcChannels = {
   rollbackPack: "teka:rollback-pack",
   onShellUpdate: "teka:on-shell-update",
   onPackUpdate: "teka:on-pack-update",
+  getSession: "teka:get-session",
+  login: "teka:login",
+  logout: "teka:logout",
+  getMe: "teka:get-me",
+  getLocale: "teka:get-locale",
+  setLocale: "teka:set-locale",
+  listProducts: "teka:list-products",
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
+
+export type AppLocale = "fr" | "en";
 
 export interface AppInfo {
   name: string;
@@ -91,4 +100,78 @@ export interface AppInfo {
   platform: NodeJS.Platform;
   userDataPath: string;
   isPackaged: boolean;
+  apiConfigured: boolean;
+  apiBaseUrl: string | null;
+  locale: AppLocale;
+  deviceLocale: AppLocale;
+}
+
+export interface LocaleInfo {
+  locale: AppLocale;
+  deviceLocale: AppLocale;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  prenom?: string;
+  email: string;
+  type_utilisateur?: string;
+  roles?: string[];
+  entreprise?: {
+    id?: string;
+    nom?: string;
+    devise?: string | null;
+  } | null;
+  branche?: {
+    id?: string;
+    nom?: string;
+  } | null;
+}
+
+export interface AuthSelectableProfile {
+  id: string;
+  name?: string;
+  email?: string;
+  entreprise?: { id?: string; nom?: string } | null;
+  type_utilisateur?: string;
+}
+
+export type AuthLoginResult =
+  | { status: "authenticated"; user: AuthUser }
+  | {
+      status: "profile_selection";
+      profiles: AuthSelectableProfile[];
+      message?: string;
+    };
+
+export interface SessionInfo {
+  authenticated: boolean;
+  apiConfigured: boolean;
+  apiBaseUrl: string | null;
+}
+
+/** Produit catalogue / caisse (champs utiles POS). */
+export interface Product {
+  id: string;
+  nom: string;
+  sku?: string | null;
+  type?: string | null;
+  code_barre?: string | null;
+  prix_vente?: number | string | null;
+  prix_vente_ttc?: number | string | null;
+  stock?: number | null;
+  stock_disponible?: number | null;
+  est_vendable?: boolean | number;
+  actif?: boolean | number;
+  categorie?: { id: string; nom: string } | null;
+}
+
+export interface ProductListQuery {
+  search?: string;
+  type?: "produit" | "service";
+  per_page?: number;
+  page?: number;
+  /** Aligné front : true = actifs seulement */
+  actif?: boolean;
 }

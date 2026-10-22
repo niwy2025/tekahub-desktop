@@ -2,8 +2,15 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import {
   IpcChannels,
   type AppInfo,
+  type AppLocale,
+  type AuthLoginResult,
+  type AuthUser,
+  type LocaleInfo,
   type PackLocalState,
   type PackUpdateState,
+  type Product,
+  type ProductListQuery,
+  type SessionInfo,
   type ShellUpdateState,
 } from "@teka/shared";
 
@@ -31,6 +38,20 @@ const api = {
     ipcRenderer.on(IpcChannels.onPackUpdate, listener);
     return () => ipcRenderer.removeListener(IpcChannels.onPackUpdate, listener);
   },
+  getSession: (): Promise<{
+    session: SessionInfo;
+    user: AuthUser | null;
+    locale: LocaleInfo;
+  }> => ipcRenderer.invoke(IpcChannels.getSession),
+  login: (login: string, password: string, userId?: string): Promise<AuthLoginResult> =>
+    ipcRenderer.invoke(IpcChannels.login, { login, password, userId }),
+  logout: (): Promise<void> => ipcRenderer.invoke(IpcChannels.logout),
+  getMe: (): Promise<AuthUser> => ipcRenderer.invoke(IpcChannels.getMe),
+  getLocale: (): Promise<LocaleInfo> => ipcRenderer.invoke(IpcChannels.getLocale),
+  setLocale: (locale: AppLocale): Promise<LocaleInfo> =>
+    ipcRenderer.invoke(IpcChannels.setLocale, locale),
+  listProducts: (query?: ProductListQuery): Promise<Product[]> =>
+    ipcRenderer.invoke(IpcChannels.listProducts, query),
 };
 
 contextBridge.exposeInMainWorld("teka", api);

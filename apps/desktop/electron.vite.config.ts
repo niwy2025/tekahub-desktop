@@ -2,9 +2,14 @@ import { resolve } from "node:path";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 
+/** Workspace ESM packages — bundle into Electron CJS (preload must stay Node-builtin-free). */
+const bundleWorkspace = externalizeDepsPlugin({
+  exclude: ["@teka/shared", "@teka/shared/crypto"],
+});
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [bundleWorkspace],
     build: {
       rollupOptions: {
         input: {
@@ -14,7 +19,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [bundleWorkspace],
     build: {
       rollupOptions: {
         input: {

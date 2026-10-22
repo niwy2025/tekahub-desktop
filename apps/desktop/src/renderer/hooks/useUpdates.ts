@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppInfo, PackUpdateState, ShellUpdateState } from "@teka/shared";
+import type { PackUpdateState, ShellUpdateState } from "@teka/shared";
 
 const idleShell: ShellUpdateState = {
   status: "idle",
@@ -7,14 +7,14 @@ const idleShell: ShellUpdateState = {
   message: "Initialisation…",
 };
 
-export function useUpdates() {
-  const [info, setInfo] = useState<AppInfo | null>(null);
+export function useUpdates(enabled: boolean) {
   const [shell, setShell] = useState<ShellUpdateState>(idleShell);
   const [packs, setPacks] = useState<PackUpdateState[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void window.teka.getAppInfo().then(setInfo);
+    if (!enabled || !window.teka) return;
+
     void window.teka.getUpdateState().then(setShell);
     void window.teka.getPacksState().then(setPacks);
 
@@ -29,9 +29,10 @@ export function useUpdates() {
       offShell();
       offPack();
     };
-  }, []);
+  }, [enabled]);
 
   async function checkNow() {
+    if (!window.teka) return;
     setBusy(true);
     try {
       const res = await window.teka.checkUpdates();
@@ -43,19 +44,19 @@ export function useUpdates() {
   }
 
   async function installShell() {
-    await window.teka.installShellUpdate();
+    await window.teka?.installShellUpdate();
   }
 
   async function rollback(packId: string) {
+    if (!window.teka) return;
     setBusy(true);
     try {
       await window.teka.rollbackPack(packId);
-      const next = await window.teka.getPacksState();
-      setPacks(next);
+      setPacks(await window.teka.getPacksState());
     } finally {
       setBusy(false);
     }
   }
 
-  return { info, shell, packs, busy, checkNow, installShell, rollback };
+  return { shell, packs, busy, checkNow, installShell, rollback };
 }

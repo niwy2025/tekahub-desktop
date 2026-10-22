@@ -10,16 +10,6 @@ const labels: Record<UpdateStatus, string> = {
   error: "Erreur",
 };
 
-const colors: Record<UpdateStatus, string> = {
-  idle: "var(--muted)",
-  checking: "var(--warn)",
-  "up-to-date": "var(--accent)",
-  available: "var(--warn)",
-  downloading: "var(--warn)",
-  ready: "var(--accent)",
-  error: "var(--danger)",
-};
-
 export function StatusBadge({
   status,
   message,
@@ -29,35 +19,45 @@ export function StatusBadge({
   message?: string;
   progress?: number;
 }) {
+  const isOk = status === "up-to-date";
+  const isWarn = status === "downloading" || status === "checking" || status === "available";
+  const isErr = status === "error";
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        borderRadius: 999,
+        border: "1px solid var(--tek-line)",
+        background: isOk
+          ? "rgba(244, 198, 15, 0.18)"
+          : isErr
+            ? "rgba(192, 38, 38, 0.1)"
+            : "var(--tek-card)",
+        color: isErr ? "var(--tek-danger)" : "var(--tek-ink)",
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
       <span
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "6px 12px",
-          borderRadius: 8,
-          background: "var(--accent-soft)",
-          border: "1px solid var(--border)",
-          color: colors[status],
-          fontSize: 13,
-          fontWeight: 600,
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: isErr
+            ? "var(--tek-danger)"
+            : isWarn
+              ? "var(--tek-yellow)"
+              : isOk
+                ? "var(--tek-black)"
+                : "var(--tek-ash)",
         }}
-      >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: colors[status],
-          }}
-        />
-        {message ?? labels[status]}
-        {typeof progress === "number" && status === "downloading"
-          ? ` ${progress}%`
-          : null}
-      </span>
-    </div>
+      />
+      {message ?? labels[status]}
+      {typeof progress === "number" && status === "downloading" ? ` ${progress}%` : null}
+    </span>
   );
 }

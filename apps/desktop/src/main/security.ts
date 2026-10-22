@@ -1,10 +1,13 @@
-import { session } from "electron";
+import { app, session } from "electron";
 
 /**
- * Strict CSP for the shell renderer.
- * Packs loaded from file:// userData may need a separate BrowserWindow / protocol later.
+ * Strict CSP only when packaged. In dev, Vite HMR needs ws + unsafe-eval.
  */
 export function applyContentSecurityPolicy(): void {
+  if (!app.isPackaged) {
+    return;
+  }
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {

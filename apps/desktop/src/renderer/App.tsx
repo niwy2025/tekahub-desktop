@@ -1,199 +1,157 @@
-import type { ReactNode } from "react";
-import { StatusBadge } from "./components/StatusBadge";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { LoginScreen } from "./components/LoginScreen";
+import { useAuth } from "./hooks/useAuth";
 import { useUpdates } from "./hooks/useUpdates";
+import {
+  moduleFromAction,
+  type AppModule,
+  type ShortcutAction,
+} from "./keyboard/shortcuts";
+import { useGlobalShortcuts } from "./keyboard/useGlobalShortcuts";
+import { t } from "./i18n/messages";
+import { PlaceholderScreen } from "./screens/PlaceholderScreen";
+import { PosScreen } from "./screens/PosScreen";
+import { ProductsScreen } from "./screens/ProductsScreen";
+import { SettingsScreen } from "./screens/SettingsScreen";
+import { AppShell } from "./shell/AppShell";
+import { ShortcutHelp } from "./shell/ShortcutHelp";
 
 export function App() {
-  const { info, shell, packs, busy, checkNow, installShell, rollback } = useUpdates();
+  const {
+    booting,
+    user,
+    session,
+    profiles,
+    bridgeError,
+    locale,
+    setLocale,
+    login,
+    logout,
+    clearProfiles,
+  } = useAuth();
+  const updates = useUpdates(Boolean(user));
+  const [module, setModule] = useState<AppModule>("pos");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const posSearchRef = useRef<HTMLInputElement>(null);
 
-  return (
-    <div
-      style={{
-        minHeight: "100%",
-        display: "flex",
-        flexDirection: "column",
-        padding: "48px 56px",
-        gap: 40,
-      }}
-    >
-      <header>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "var(--muted)",
-          }}
-        >
-          Shell desktop
-        </p>
-        <h1
-          style={{
-            margin: "8px 0 0",
-            fontSize: 42,
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-          }}
-        >
-          TekaHub
-        </h1>
-        <p style={{ margin: "12px 0 0", color: "var(--muted)", maxWidth: 480 }}>
-          Runtime installé une fois. Contenu et packs versionnés dans le dossier
-          utilisateur — mises à jour sans réinstaller.
-        </p>
-      </header>
+  const shortcutHandlers = useMemo(() => {
+    const navigate = (action: ShortcutAction) => {
+      const next = moduleFromAction(action);
+      if (next) setModule(next);
+    };
+    return {
+      help: () => setHelpOpen((v) => !v),
+      "nav.pos": () => navigate("nav.pos"),
+      "nav.products": () => navigate("nav.products"),
+      "nav.customers": () => navigate("nav.customers"),
+      "nav.history": () => navigate("nav.history"),
+      "nav.settings": () => navigate("nav.settings"),
+      "focus.search": () => {
+        setModule("pos");
+        requestAnimationFrame(() => posSearchRef.current?.focus());
+      },
+      logout: () => {
+        void logout();
+      },
+    };
+  }, [logout]);
 
-      <section
+  useGlobalShortcuts(shortcutHandlers, Boolean(user) && !helpOpen);
+
+  const onNavigate = useCallback((next: AppModule) => {
+    setModule(next);
+  }, []);
+
+  if (booting) {
+    return (
+      <div
         style={{
+          minHeight: "100%",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 20,
+          placeItems: "center",
+          color: "var(--tek-ash)",
         }}
       >
-        <Panel title="Application">
-          <Row label="Version shell" value={info?.version ?? "…"} />
-          <Row label="Plateforme" value={info?.platform ?? "…"} />
-          <Row label="Données" value={info?.userDataPath ?? "…"} mono />
-          <div style={{ marginTop: 16 }}>
-            <StatusBadge
-              status={shell.status}
-              message={shell.message}
-              progress={shell.progress}
-            />
-          </div>
-          {shell.availableVersion ? (
-            <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--muted)" }}>
-              Disponible : v{shell.availableVersion}
-            </p>
-          ) : null}
-          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-            <Btn onClick={() => void checkNow()} disabled={busy}>
-              Vérifier les mises à jour
-            </Btn>
-            {shell.status === "ready" ? (
-              <Btn primary onClick={() => void installShell()}>
-                Redémarrer pour appliquer
-              </Btn>
-            ) : null}
-          </div>
-        </Panel>
+        {t(locale, "loading")}
+      </div>
+    );
+  }
 
-        <Panel title="Packs dynamiques">
-          {packs.length === 0 ? (
-            <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>
-              Aucun état pack pour l’instant. Configure{" "}
-              <code>PACKS_UPDATE_URL</code> pour activer les téléchargements.
-            </p>
-          ) : (
-            packs.map((p) => (
-              <div key={p.packId} style={{ marginBottom: 16 }}>
-                <Row label="Pack" value={p.packId} />
-                <Row label="Version" value={p.currentVersion ?? "—"} />
-                <div style={{ marginTop: 10 }}>
-                  <StatusBadge
-                    status={p.status}
-                    message={p.message}
-                    progress={p.progress}
-                  />
-                </div>
-                {p.error ? (
-                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--danger)" }}>
-                    {p.error}
-                  </p>
-                ) : null}
-                <div style={{ marginTop: 12 }}>
-                  <Btn onClick={() => void rollback(p.packId)} disabled={busy}>
-                    Rollback
-                  </Btn>
-                </div>
-              </div>
-            ))
-          )}
-        </Panel>
-      </section>
-    </div>
-  );
-}
+  if (bridgeError) {
+    return (
+      <div style={{ padding: 40, color: "var(--tek-danger)" }}>{bridgeError}</div>
+    );
+  }
 
-function Panel({ title, children }: { title: string; children: ReactNode }) {
+  if (!user) {
+    return (
+      <LoginScreen
+        locale={locale}
+        onLocaleChange={(next) => void setLocale(next)}
+        apiConfigured={session?.apiConfigured ?? false}
+        profiles={profiles}
+        onClearProfiles={clearProfiles}
+        onLogin={login}
+      />
+    );
+  }
+
+  const currency = user.entreprise?.devise ?? null;
+
+  let content = null;
+  switch (module) {
+    case "pos":
+      content = (
+        <PosScreen
+          locale={locale}
+          currency={currency}
+          searchRefExternal={posSearchRef}
+        />
+      );
+      break;
+    case "products":
+      content = <ProductsScreen locale={locale} currency={currency} />;
+      break;
+    case "customers":
+      content = <PlaceholderScreen locale={locale} titleKey="customersTitle" />;
+      break;
+    case "history":
+      content = <PlaceholderScreen locale={locale} titleKey="historyTitle" />;
+      break;
+    case "settings":
+      content = (
+        <SettingsScreen
+          locale={locale}
+          user={user}
+          shell={updates.shell}
+          packs={updates.packs}
+          busy={updates.busy}
+          onCheckUpdates={() => void updates.checkNow()}
+          onInstallShell={() => void updates.installShell()}
+          onRollback={(packId) => void updates.rollback(packId)}
+        />
+      );
+      break;
+  }
+
   return (
-    <div
-      style={{
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border)",
-        borderRadius: 14,
-        padding: 24,
-      }}
-    >
-      <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600 }}>{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 16,
-        padding: "8px 0",
-        borderBottom: "1px solid var(--border)",
-        fontSize: 13,
-      }}
-    >
-      <span style={{ color: "var(--muted)" }}>{label}</span>
-      <span
-        style={{
-          textAlign: "right",
-          wordBreak: "break-all",
-          fontFamily: mono ? "ui-monospace, monospace" : undefined,
-          fontSize: mono ? 11 : 13,
-        }}
+    <>
+      <AppShell
+        locale={locale}
+        onLocaleChange={(next) => void setLocale(next)}
+        user={user}
+        module={module}
+        onNavigate={onNavigate}
+        onLogout={() => void logout()}
+        onOpenHelp={() => setHelpOpen(true)}
       >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Btn({
-  children,
-  onClick,
-  disabled,
-  primary,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        border: primary ? "none" : "1px solid var(--border)",
-        background: primary ? "var(--accent)" : "transparent",
-        color: primary ? "#04140f" : "var(--text)",
-        padding: "8px 14px",
-        borderRadius: 8,
-        fontWeight: 600,
-        fontSize: 13,
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      {children}
-    </button>
+        {content}
+      </AppShell>
+      <ShortcutHelp
+        locale={locale}
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+      />
+    </>
   );
 }

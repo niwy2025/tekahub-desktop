@@ -19,8 +19,8 @@ import {
   type PackLocalState,
   type PackManifest,
   type PackUpdateState,
-  verifyPackManifest,
 } from "@teka/shared";
+import { verifyPackManifest } from "@teka/shared/crypto";
 import { appConfig } from "./config";
 import { getAppPaths, packCurrentLink, packVersionDir } from "./paths";
 
