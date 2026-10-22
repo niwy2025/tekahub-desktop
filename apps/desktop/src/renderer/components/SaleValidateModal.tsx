@@ -28,16 +28,31 @@ type Props = {
   onSuccess: () => void;
 };
 
+const COUNTRY_CODE = "243";
+
 function unitPrice(line: CartLine): number {
   return Number(line.product.prix_vente_ttc ?? line.product.prix_vente ?? 0) || 0;
 }
 
+/** Partie locale du numéro (sans indicatif 243 / 0). */
+function toLocalPhone(raw: string): string {
+  let digits = raw.replace(/\D+/g, "");
+  if (digits.startsWith(COUNTRY_CODE)) digits = digits.slice(COUNTRY_CODE.length);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  return digits;
+}
+
+/** Numéro complet stocké / envoyé à l’API. */
+function toFullPhone(local: string): string {
+  const digits = toLocalPhone(local);
+  if (!digits) return "";
+  return `${COUNTRY_CODE}${digits}`;
+}
+
 /**
  * Grand modal validation vente :
- * - récap lignes + total
- * - téléphone autofocus → check client
- * - nom si nouveau / optionnel si passage caisse
- * - Entrée sur téléphone lance le check ; Valider crée la vente
+ * - tableau lignes + total
+ * - client en tableau, téléphone avec label 243
  */
 export function SaleValidateModal({
   locale,
@@ -55,7 +70,7 @@ export function SaleValidateModal({
     getClientsSnapshot,
   );
 
-  const [phone, setPhone] = useState("");
+  const [phoneLocal, setPhoneLocal] = useState("");
   const [name, setName] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
   const [status, setStatus] = useState<ClientStatus>("idle");
@@ -65,6 +80,7 @@ export function SaleValidateModal({
 
   const total = cart.reduce((sum, line) => sum + unitPrice(line) * line.qty, 0);
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
+  const fullPhone = toFullPhone(phoneLocal);
 
   useEffect(() => {
     phoneRef.current?.focus();
@@ -82,16 +98,16 @@ export function SaleValidateModal({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose, submitting]);
 
-  /** Recherche 100 % locale — pas d’appel API à chaque numéro. */
-  function runClientCheck(rawPhone: string) {
-    const telephone = rawPhone.trim();
-    if (!telephone) {
+  function runClientCheck(localRaw: string) {
+    const local = toLocalPhone(localRaw);
+    if (!local) {
       setClientId(null);
       setStatus("idle");
       setStatusMsg(null);
       return;
     }
 
+    const telephone = toFullPhone(local);
     setSubmitError(null);
     setStatus("checking");
     setStatusMsg(t(locale, "saleClientChecking"));
@@ -100,7 +116,7 @@ export function SaleValidateModal({
     if (match?.id) {
       setClientId(match.id);
       setName(match.nom?.trim() || "");
-      if (match.telephone) setPhone(match.telephone);
+      setPhoneLocal(toLocalPhone(match.telephone ?? local));
       setStatus("found");
       setStatusMsg(
         `${t(locale, "saleClientFound")}${match.nom ? ` — ${match.nom}` : ""}`,
@@ -122,7 +138,7 @@ export function SaleValidateModal({
   function onPhoneKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
-      runClientCheck(phone);
+      runClientCheck(phoneLocal);
     }
   }
 
@@ -134,7 +150,7 @@ export function SaleValidateModal({
   }
 
   function clearClient() {
-    setPhone("");
+    setPhoneLocal("");
     setName("");
     setClientId(null);
     setStatus("idle");
@@ -146,7 +162,7 @@ export function SaleValidateModal({
     e?.preventDefault();
     if (submitting || cart.length === 0) return;
 
-    const telephone = phone.trim();
+    const telephone = fullPhone;
     const nom = name.trim();
 
     if (telephone && status === "new" && !nom) {
@@ -183,7 +199,6 @@ export function SaleValidateModal({
           telephone: telephone || sale.client_telephone || null,
         });
       } else if (telephone && nom) {
-        // Nouveau client créé côté API — entrée locale jusqu’au prochain refresh.
         upsertLocalClient({
           id: `local:${telephone}`,
           nom,
@@ -230,24 +245,48 @@ export function SaleValidateModal({
             <p style={{ margin: "4px 0 12px", fontSize: 13, color: "var(--tek-ash)" }}>
               {itemsCount} {t(locale, "posCartItems")}
             </p>
-            <ul style={linesList}>
-              {cart.map((line) => {
-                const unit = unitPrice(line);
-                return (
-                  <li key={line.product.id} style={lineRow}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={lineName}>{line.product.nom}</div>
-                      <div style={{ fontSize: 12, color: "var(--tek-ash)", marginTop: 2 }}>
-                        {formatPrice(unit, locale, currency)} × {line.qty}
-                      </div>
-                    </div>
-                    <strong style={{ fontSize: 14, flexShrink: 0 }}>
-                      {formatPrice(unit * line.qty, locale, currency)}
-                    </strong>
-                  </li>
-                );
-              })}
-            </ul>
+
+            <div style={tableWrap}>
+              <table style={table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, textAlign: "left" }}>{t(locale, "saleColProduct")}</th>
+                    <th style={{ ...th, textAlign: "right", width: 56 }}>{t(locale, "saleColQty")}</th>
+                    <th style={{ ...th, textAlign: "right", width: 88 }}>{t(locale, "saleColUnit")}</th>
+                    <th style={{ ...th, textAlign: "right", width: 96 }}>{t(locale, "saleColLine")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.map((line) => {
+                    const unit = unitPrice(line);
+                    return (
+                      <tr key={line.product.id}>
+                        <td style={{ ...td, textAlign: "left" }}>
+                          <div style={lineName}>{line.product.nom}</div>
+                        </td>
+                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                          {line.qty}
+                        </td>
+                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                          {formatPrice(unit, locale, currency)}
+                        </td>
+                        <td
+                          style={{
+                            ...td,
+                            textAlign: "right",
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {formatPrice(unit * line.qty, locale, currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
             <div style={totalRow}>
               <span>{t(locale, "posCartTotal")}</span>
               <strong style={{ fontSize: 22 }}>
@@ -261,56 +300,80 @@ export function SaleValidateModal({
 
           <section style={panel}>
             <h3 style={sectionTitle}>{t(locale, "saleClientSection")}</h3>
-            <p style={{ margin: "4px 0 14px", fontSize: 13, color: "var(--tek-ash)" }}>
+            <p style={{ margin: "4px 0 12px", fontSize: 13, color: "var(--tek-ash)" }}>
               {t(locale, "saleClientHint")}
             </p>
 
-            <label style={label}>
-              {t(locale, "saleClientPhone")}
-              <input
-                ref={phoneRef}
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  setClientId(null);
-                  if (status === "found" || status === "new") setStatus("idle");
-                }}
-                onKeyDown={onPhoneKeyDown}
-                onBlur={() => {
-                  if (phone.trim()) runClientCheck(phone);
-                }}
-                placeholder={t(locale, "saleClientPhonePlaceholder")}
-                disabled={submitting}
-                style={input}
-              />
-            </label>
-
-            <div style={statusBox(status)} aria-live="polite">
-              {statusMsg ?? t(locale, "saleClientOptional")}
+            <div style={tableWrap}>
+              <table style={table}>
+                <tbody>
+                  <tr>
+                    <th scope="row" style={rowLabel}>
+                      {t(locale, "saleClientPhone")}
+                    </th>
+                    <td style={td}>
+                      <div style={phoneField}>
+                        <span style={phonePrefix} aria-hidden>
+                          {t(locale, "saleClientPhonePrefix")}
+                        </span>
+                        <input
+                          ref={phoneRef}
+                          type="tel"
+                          inputMode="numeric"
+                          autoComplete="tel-national"
+                          value={phoneLocal}
+                          onChange={(e) => {
+                            setPhoneLocal(toLocalPhone(e.target.value));
+                            setClientId(null);
+                            if (status === "found" || status === "new") setStatus("idle");
+                          }}
+                          onKeyDown={onPhoneKeyDown}
+                          onBlur={() => {
+                            if (phoneLocal.trim()) runClientCheck(phoneLocal);
+                          }}
+                          placeholder={t(locale, "saleClientPhonePlaceholder")}
+                          disabled={submitting}
+                          style={phoneInput}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" style={rowLabel}>
+                      {t(locale, "saleClientStatus")}
+                    </th>
+                    <td style={td}>
+                      <div style={statusBox(status)} aria-live="polite">
+                        {statusMsg ?? t(locale, "saleClientOptional")}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" style={rowLabel}>
+                      {t(locale, "saleClientName")}
+                    </th>
+                    <td style={td}>
+                      <input
+                        ref={nameRef}
+                        type="text"
+                        autoComplete="name"
+                        value={name}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          if (clientId) setClientId(null);
+                        }}
+                        onKeyDown={onNameKeyDown}
+                        placeholder={t(locale, "saleClientNamePlaceholder")}
+                        disabled={submitting}
+                        style={inputBare}
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            <label style={label}>
-              {t(locale, "saleClientName")}
-              <input
-                ref={nameRef}
-                type="text"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (clientId) setClientId(null);
-                }}
-                onKeyDown={onNameKeyDown}
-                placeholder={t(locale, "saleClientNamePlaceholder")}
-                disabled={submitting}
-                style={input}
-              />
-            </label>
-
-            {(phone || name || clientId) && (
+            {(phoneLocal || name || clientId) && (
               <button type="button" tabIndex={-1} onClick={clearClient} style={linkBtn}>
                 {t(locale, "saleClientSkip")}
               </button>
@@ -363,7 +426,7 @@ const backdrop: CSSProperties = {
 };
 
 const dialog: CSSProperties = {
-  width: "min(920px, 100%)",
+  width: "min(960px, 100%)",
   maxHeight: "min(90vh, 820px)",
   overflow: "auto",
   background: "var(--tek-card)",
@@ -402,7 +465,7 @@ const ghostBtn: CSSProperties = {
 
 const grid: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
   gap: 16,
 };
 
@@ -419,25 +482,47 @@ const sectionTitle: CSSProperties = {
   fontSize: 15,
 };
 
-const linesList: CSSProperties = {
-  listStyle: "none",
-  margin: 0,
-  padding: 0,
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  maxHeight: 280,
+const tableWrap: CSSProperties = {
+  border: "1px solid var(--tek-line)",
+  borderRadius: 12,
   overflow: "auto",
+  maxHeight: 300,
+  background: "var(--tek-card)",
 };
 
-const lineRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
+const table: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 13,
+};
+
+const th: CSSProperties = {
   padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid var(--tek-line)",
-  background: "var(--tek-card)",
+  borderBottom: "1px solid var(--tek-line)",
+  background: "rgba(0,0,0,0.03)",
+  color: "var(--tek-ash)",
+  fontWeight: 650,
+  fontSize: 11,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  position: "sticky",
+  top: 0,
+};
+
+const td: CSSProperties = {
+  padding: "10px 12px",
+  borderBottom: "1px solid var(--tek-line)",
+  verticalAlign: "middle",
+};
+
+const rowLabel: CSSProperties = {
+  ...td,
+  width: 108,
+  textAlign: "left",
+  color: "var(--tek-ash)",
+  fontWeight: 650,
+  fontSize: 12,
+  background: "rgba(0,0,0,0.02)",
 };
 
 const lineName: CSSProperties = {
@@ -446,6 +531,7 @@ const lineName: CSSProperties = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  maxWidth: 220,
 };
 
 const totalRow: CSSProperties = {
@@ -459,22 +545,46 @@ const totalRow: CSSProperties = {
   fontWeight: 650,
 };
 
-const label: CSSProperties = {
-  display: "grid",
-  gap: 6,
-  fontSize: 12,
-  fontWeight: 650,
-  color: "var(--tek-ash)",
-  marginBottom: 12,
+const phoneField: CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  border: "1px solid var(--tek-line)",
+  borderRadius: 10,
+  overflow: "hidden",
+  background: "var(--tek-bg)",
 };
 
-const input: CSSProperties = {
+const phonePrefix: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0 12px",
+  background: "rgba(244, 198, 15, 0.35)",
+  color: "var(--tek-black)",
+  fontWeight: 800,
+  fontSize: 15,
+  borderRight: "1px solid var(--tek-line)",
+  fontVariantNumeric: "tabular-nums",
+};
+
+const phoneInput: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  border: "none",
+  outline: "none",
+  padding: "11px 12px",
+  fontSize: 16,
+  background: "transparent",
+  color: "var(--tek-ink)",
+  fontVariantNumeric: "tabular-nums",
+};
+
+const inputBare: CSSProperties = {
   width: "100%",
   border: "1px solid var(--tek-line)",
-  borderRadius: 12,
-  padding: "12px 14px",
-  fontSize: 16,
-  background: "var(--tek-card)",
+  borderRadius: 10,
+  padding: "11px 12px",
+  fontSize: 15,
+  background: "var(--tek-bg)",
   color: "var(--tek-ink)",
 };
 
@@ -486,13 +596,11 @@ function statusBox(status: ClientStatus): CSSProperties {
         ? { bg: "rgba(244, 198, 15, 0.2)", color: "var(--tek-black)" }
         : status === "error"
           ? { bg: "rgba(192, 38, 38, 0.1)", color: "var(--tek-danger)" }
-          : { bg: "var(--tek-card)", color: "var(--tek-ash)" };
+          : { bg: "transparent", color: "var(--tek-ash)" };
 
   return {
-    marginBottom: 12,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid var(--tek-line)",
+    padding: "8px 10px",
+    borderRadius: 8,
     background: tone.bg,
     color: tone.color,
     fontSize: 13,
@@ -501,6 +609,7 @@ function statusBox(status: ClientStatus): CSSProperties {
 }
 
 const linkBtn: CSSProperties = {
+  marginTop: 12,
   border: "none",
   background: "transparent",
   color: "var(--tek-ash)",
