@@ -152,6 +152,7 @@ export function PosScreen({
             ) : (
               products.map((product) => {
                 const active = product.id === selectedId;
+                const inCart = cart.find((line) => line.product.id === product.id);
                 const price = product.prix_vente_ttc ?? product.prix_vente;
                 return (
                   <button
@@ -163,14 +164,26 @@ export function PosScreen({
                     onFocus={() => setSelectedId(product.id)}
                     style={{
                       ...productRow,
-                      borderColor: active ? "var(--tek-black)" : "var(--tek-line)",
-                      background: active ? "rgba(244, 198, 15, 0.18)" : "var(--tek-bg)",
+                      borderColor: inCart
+                        ? "var(--tek-yellow)"
+                        : active
+                          ? "var(--tek-black)"
+                          : "var(--tek-line)",
+                      background: inCart
+                        ? "rgba(244, 198, 15, 0.28)"
+                        : active
+                          ? "rgba(244, 198, 15, 0.12)"
+                          : "var(--tek-bg)",
+                      boxShadow: inCart
+                        ? "inset 3px 0 0 var(--tek-yellow)"
+                        : undefined,
                     }}
                   >
                     <div>
                       <strong>{product.nom}</strong>
                       <div style={{ fontSize: 12, color: "var(--tek-ash)", marginTop: 2 }}>
                         {[product.sku, product.code_barre].filter(Boolean).join(" · ") || "—"}
+                        {inCart ? ` · ×${inCart.qty}` : ""}
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
