@@ -15,6 +15,7 @@ import {
   upsertLocalClient,
 } from "../catalog/clientCatalogStore";
 import { formatPrice } from "../hooks/useProducts";
+import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { friendlyNetworkError, t } from "../i18n/messages";
 import type { CartLine } from "./CartPanel";
 
@@ -74,6 +75,8 @@ export function SaleValidateModal({
   onClose,
   onSuccess,
 }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const payDialogRef = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -94,6 +97,9 @@ export function SaleValidateModal({
   const [paidInput, setPaidInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useFocusTrap(dialogRef, !paymentOpen);
+  useFocusTrap(payDialogRef, paymentOpen);
 
   const total = cart.reduce((sum, line) => sum + unitPrice(line) * line.qty, 0);
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
@@ -263,9 +269,11 @@ export function SaleValidateModal({
   return (
     <div role="presentation" style={backdrop} onClick={() => !submitting && onClose()}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="sale-validate-title"
+        tabIndex={-1}
         style={dialog}
         onClick={(e) => e.stopPropagation()}
       >
@@ -278,7 +286,6 @@ export function SaleValidateModal({
           </div>
           <button
             type="button"
-            tabIndex={-1}
             disabled={submitting}
             onClick={onClose}
             style={ghostBtn}
@@ -422,14 +429,14 @@ export function SaleValidateModal({
             </div>
 
             {(phoneLocal || name || clientId) && (
-              <button type="button" tabIndex={-1} onClick={clearClient} style={linkBtn}>
+              <button type="button" onClick={clearClient} style={linkBtn}>
                 {t(locale, "saleClientSkip")}
               </button>
             )}
           </section>
         </div>
 
-        {submitError ? (
+        {submitError && !paymentOpen ? (
           <p style={{ margin: "14px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
             {submitError}
           </p>
@@ -450,7 +457,6 @@ export function SaleValidateModal({
           </button>
           <button
             type="button"
-            tabIndex={-1}
             disabled={submitting}
             onClick={onClose}
             style={cancelBtn}
@@ -466,9 +472,11 @@ export function SaleValidateModal({
             onClick={() => !submitting && setPaymentOpen(false)}
           >
             <div
+              ref={payDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby="sale-pay-title"
+              tabIndex={-1}
               style={payDialog}
               onClick={(e) => e.stopPropagation()}
             >
@@ -548,7 +556,6 @@ export function SaleValidateModal({
                 </button>
                 <button
                   type="button"
-                  tabIndex={-1}
                   disabled={submitting}
                   onClick={() => setPaymentOpen(false)}
                   style={cancelBtn}

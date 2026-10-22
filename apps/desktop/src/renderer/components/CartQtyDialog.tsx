@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { AppLocale } from "@teka/shared";
 import { formatPrice } from "../hooks/useProducts";
+import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { t } from "../i18n/messages";
 import type { CartLine } from "./CartPanel";
 
@@ -28,16 +29,18 @@ export function CartQtyDialog({
   const [qty, setQty] = useState(line.qty);
   const qtyRef = useRef(qty);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const unit = Number(line.product.prix_vente_ttc ?? line.product.prix_vente ?? 0) || 0;
 
   qtyRef.current = qty;
+  useFocusTrap(dialogRef, true);
 
   useEffect(() => {
     setQty(line.qty);
   }, [line.product.id, line.qty]);
 
   useEffect(() => {
-    dialogRef.current?.focus();
+    confirmRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -138,13 +141,18 @@ export function CartQtyDialog({
         <p style={hint}>{t(locale, "posQtyHint")}</p>
 
         <div style={actions}>
-          <button type="button" tabIndex={-1} style={confirmBtn} onClick={() => onConfirm(qty)}>
+          <button
+            ref={confirmRef}
+            type="button"
+            style={confirmBtn}
+            onClick={() => onConfirm(qty)}
+          >
             {t(locale, "posQtyConfirm")}
           </button>
-          <button type="button" tabIndex={-1} style={removeBtn} onClick={onRemove}>
+          <button type="button" style={removeBtn} onClick={onRemove}>
             {t(locale, "posCartRemove")}
           </button>
-          <button type="button" tabIndex={-1} style={cancelBtn} onClick={onClose}>
+          <button type="button" style={cancelBtn} onClick={onClose}>
             {t(locale, "posQtyCancel")}
           </button>
         </div>
