@@ -801,7 +801,7 @@ const table: CSSProperties = {
 const th: CSSProperties = {
   padding: "10px 12px",
   borderBottom: "1px solid var(--tek-line)",
-  background: "rgba(0,0,0,0.03)",
+  background: "var(--tek-card)",
   color: "var(--tek-ash)",
   fontWeight: 650,
   fontSize: 11,
