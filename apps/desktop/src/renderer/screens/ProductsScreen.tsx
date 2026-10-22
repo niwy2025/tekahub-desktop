@@ -31,22 +31,38 @@ export function ProductsScreen({
       ) : null}
 
       {loading ? (
-        <ProductListSkeleton rows={8} />
+        <ProductListSkeleton rows={12} />
       ) : products.length === 0 ? (
         <p style={{ color: "var(--tek-ash)" }}>{t(locale, "productsEmpty")}</p>
       ) : (
-        <div style={{ display: "grid", gap: 8 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+            gap: 12,
+          }}
+        >
           {products.map((product) => (
-            <div key={product.id} style={row}>
-              <div>
-                <strong>{product.nom}</strong>
-                <div style={{ fontSize: 12, color: "var(--tek-ash)", marginTop: 2 }}>
-                  {[product.sku, product.code_barre, product.categorie?.nom]
-                    .filter(Boolean)
-                    .join(" · ") || "—"}
-                </div>
+            <div key={product.id} style={card}>
+              <strong
+                style={{
+                  fontSize: 14,
+                  lineHeight: 1.3,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  minHeight: "2.6em",
+                }}
+              >
+                {product.nom}
+              </strong>
+              <div style={{ fontSize: 11, color: "var(--tek-ash)", marginTop: 6 }}>
+                {[product.sku, product.code_barre, product.categorie?.nom]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
               </div>
-              <div style={{ textAlign: "right", fontWeight: 700 }}>
+              <div style={{ marginTop: "auto", paddingTop: 10, fontWeight: 700, fontSize: 15 }}>
                 {formatPrice(product.prix_vente_ttc ?? product.prix_vente, locale, currency)}
               </div>
             </div>
@@ -66,12 +82,12 @@ const searchInput: CSSProperties = {
   background: "var(--tek-card)",
 };
 
-const row: CSSProperties = {
+const card: CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "12px 14px",
-  borderRadius: 12,
+  flexDirection: "column",
+  padding: 14,
+  borderRadius: 14,
   border: "1px solid var(--tek-line)",
   background: "var(--tek-card)",
+  minHeight: 120,
 };

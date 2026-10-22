@@ -87,17 +87,25 @@ export function PosScreen({
       setQuery("");
       return;
     }
-    if (e.key === "ArrowDown" && products.length > 0) {
+    if (
+      (e.key === "ArrowDown" || e.key === "ArrowRight") &&
+      products.length > 0
+    ) {
       e.preventDefault();
-      const idx = products.findIndex((p) => p.id === selectedId);
-      const next = products[Math.min(products.length - 1, Math.max(0, idx + 1))];
+      const idx = Math.max(0, products.findIndex((p) => p.id === selectedId));
+      const step = e.key === "ArrowDown" ? estimateGridColumns() : 1;
+      const next = products[Math.min(products.length - 1, idx + step)];
       setSelectedId(next.id);
       return;
     }
-    if (e.key === "ArrowUp" && products.length > 0) {
+    if (
+      (e.key === "ArrowUp" || e.key === "ArrowLeft") &&
+      products.length > 0
+    ) {
       e.preventDefault();
-      const idx = products.findIndex((p) => p.id === selectedId);
-      const next = products[Math.max(0, idx <= 0 ? 0 : idx - 1)];
+      const idx = Math.max(0, products.findIndex((p) => p.id === selectedId));
+      const step = e.key === "ArrowUp" ? estimateGridColumns() : 1;
+      const next = products[Math.max(0, idx - step)];
       setSelectedId(next.id);
       return;
     }
@@ -143,12 +151,24 @@ export function PosScreen({
           <div
             role="listbox"
             aria-label={t(locale, "posTitle")}
-            style={{ marginTop: 14, maxHeight: "calc(100vh - 260px)", overflow: "auto" }}
+            style={{
+              marginTop: 14,
+              maxHeight: "calc(100vh - 260px)",
+              overflow: "auto",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+              gap: 12,
+              alignContent: "start",
+            }}
           >
             {loading ? (
-              <ProductListSkeleton rows={7} />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <ProductListSkeleton rows={12} />
+              </div>
             ) : products.length === 0 ? (
-              <p style={{ color: "var(--tek-ash)", fontSize: 14 }}>{t(locale, "productsEmpty")}</p>
+              <p style={{ gridColumn: "1 / -1", color: "var(--tek-ash)", fontSize: 14 }}>
+                {t(locale, "productsEmpty")}
+              </p>
             ) : (
               products.map((product) => {
                 const active = product.id === selectedId;
@@ -163,7 +183,7 @@ export function PosScreen({
                     onClick={() => addToCart(product)}
                     onFocus={() => setSelectedId(product.id)}
                     style={{
-                      ...productRow,
+                      ...productCard,
                       borderColor: inCart
                         ? "var(--tek-yellow)"
                         : active
@@ -175,22 +195,34 @@ export function PosScreen({
                           ? "rgba(244, 198, 15, 0.12)"
                           : "var(--tek-bg)",
                       boxShadow: inCart
-                        ? "inset 3px 0 0 var(--tek-yellow)"
+                        ? "inset 0 0 0 2px var(--tek-yellow)"
                         : undefined,
                     }}
                   >
-                    <div>
-                      <strong>{product.nom}</strong>
-                      <div style={{ fontSize: 12, color: "var(--tek-ash)", marginTop: 2 }}>
-                        {[product.sku, product.code_barre].filter(Boolean).join(" · ") || "—"}
-                        {inCart ? ` · ×${inCart.qty}` : ""}
-                      </div>
+                    {inCart ? (
+                      <span style={cartBadge}>×{inCart.qty}</span>
+                    ) : null}
+                    <strong
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 1.3,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        minHeight: "2.6em",
+                      }}
+                    >
+                      {product.nom}
+                    </strong>
+                    <div style={{ fontSize: 11, color: "var(--tek-ash)", marginTop: 6 }}>
+                      {[product.sku, product.code_barre].filter(Boolean).join(" · ") || "—"}
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 700 }}>
+                    <div style={{ marginTop: "auto", paddingTop: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>
                         {formatPrice(price, locale, currency)}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--tek-ash)" }}>
+                      <div style={{ fontSize: 11, color: "var(--tek-ash)", marginTop: 2 }}>
                         {t(locale, "stock")}:{" "}
                         {product.stock_disponible ?? product.stock ?? "—"}
                       </div>
@@ -214,6 +246,13 @@ export function PosScreen({
       </div>
     </div>
   );
+}
+
+/** Approx. columns for keyboard nav in auto-fill grid (minmax 160px). */
+function estimateGridColumns(): number {
+  const width = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const usable = Math.max(320, width - 520);
+  return Math.max(1, Math.floor(usable / 172));
 }
 
 const panel: CSSProperties = {
@@ -243,15 +282,31 @@ const searchInput: CSSProperties = {
   background: "var(--tek-bg)",
 };
 
-const productRow: CSSProperties = {
-  width: "100%",
+const productCard: CSSProperties = {
+  position: "relative",
   display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
+  flexDirection: "column",
   textAlign: "left",
   border: "1px solid var(--tek-line)",
-  borderRadius: 12,
-  padding: "12px 14px",
-  marginBottom: 8,
+  borderRadius: 14,
+  padding: 14,
+  minHeight: 128,
   cursor: "pointer",
+};
+
+const cartBadge: CSSProperties = {
+  position: "absolute",
+  top: 8,
+  right: 8,
+  minWidth: 24,
+  height: 24,
+  padding: "0 6px",
+  borderRadius: 999,
+  background: "var(--tek-yellow)",
+  color: "var(--tek-black)",
+  fontSize: 12,
+  fontWeight: 700,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
