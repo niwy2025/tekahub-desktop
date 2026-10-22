@@ -16,32 +16,9 @@ export function filterProducts(products: Product[], search: string): Product[] {
   );
 }
 
-async function fetchAllProducts(): Promise<Product[]> {
-  if (!window.teka) return [];
-
-  const perPage = 100;
-  const all: Product[] = [];
-  let page = 1;
-
-  // Une seule charge initiale (comme le web), pas de recherche API à chaque frappe.
-  while (page <= 50) {
-    const batch = await window.teka.listProducts({
-      type: "produit",
-      per_page: perPage,
-      page,
-      actif: true,
-    });
-    all.push(...batch);
-    if (batch.length < perPage) break;
-    page += 1;
-  }
-
-  return all;
-}
-
 /**
- * Précharge le catalogue une fois, puis filtre en local sur `search`.
- * Évite le debounce API lent du POS / scanner.
+ * Précharge le catalogue une fois (GET /api/produits), puis filtre en local.
+ * Un seul appel — évite la boucle de pages qui multiplie les timeouts réseau.
  */
 export function useProducts(search: string, enabled = true) {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -53,7 +30,13 @@ export function useProducts(search: string, enabled = true) {
     setLoading(true);
     setError(null);
     try {
-      setAllProducts(await fetchAllProducts());
+      const list = await window.teka.listProducts({
+        type: "produit",
+        per_page: 200,
+        page: 1,
+        actif: true,
+      });
+      setAllProducts(list);
     } catch (err) {
       setAllProducts([]);
       setError(err instanceof Error ? err.message : String(err));
@@ -96,7 +79,6 @@ export function formatPrice(
       }).format(n);
     }
   } catch {
-    // devise invalide pour Intl → fallback texte
     return `${n.toLocaleString(locale, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,

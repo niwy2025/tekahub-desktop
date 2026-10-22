@@ -12,7 +12,7 @@ export function ProductsScreen({
   currency?: string | null;
 }) {
   const [query, setQuery] = useState("");
-  const { products, loading, error } = useProducts(query);
+  const { products, loading, error, reload } = useProducts(query);
 
   return (
     <div style={{ padding: 28, display: "grid", gap: 16 }}>
@@ -27,7 +27,27 @@ export function ProductsScreen({
       />
 
       {error ? (
-        <p style={{ margin: 0, color: "var(--tek-danger)", fontSize: 13 }}>{error}</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <p style={{ margin: 0, color: "var(--tek-danger)", fontSize: 13, flex: "1 1 200px" }}>
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => void reload()}
+            style={{
+              border: "1px solid var(--tek-line)",
+              borderRadius: 10,
+              padding: "8px 14px",
+              background: "var(--tek-yellow)",
+              color: "var(--tek-black)",
+              fontWeight: 650,
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            {t(locale, "productsRetry")}
+          </button>
+        </div>
       ) : null}
 
       {loading ? (

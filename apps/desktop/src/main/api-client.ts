@@ -1,3 +1,4 @@
+import { net } from "electron";
 import { appConfig, assertApiConfigured } from "./config";
 import { getSessionToken } from "./session";
 
@@ -47,6 +48,28 @@ function buildQuery(
   return qs ? `?${qs}` : "";
 }
 
+function networkErrorMessage(err: unknown): string {
+  const root =
+    err && typeof err === "object" && "cause" in err
+      ? ((err as { cause?: unknown }).cause ?? err)
+      : err;
+  const text = root instanceof Error ? `${root.name} ${root.message}` : String(root);
+  if (/timeout|UND_ERR_CONNECT|ConnectTimeout|ETIMEDOUT|AbortError/i.test(text)) {
+    return "Impossible de joindre l’API (délai dépassé). Vérifiez la connexion puis réessayez.";
+  }
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(text)) {
+    return "Impossible de résoudre l’hôte API. Vérifiez API_BASE_URL et le DNS.";
+  }
+  if (/ECONNREFUSED|ECONNRESET|fetch failed/i.test(text)) {
+    return "Connexion à l’API refusée ou interrompue. Réessayez dans un instant.";
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Appels API via `net.fetch` (stack réseau Chromium) — plus fiable que
+ * undici/Node `fetch` sur des hôtes lents / timeouts de connexion.
+ */
 export async function apiRequest<T = unknown>(
   path: string,
   options: ApiRequestOptions = {},
@@ -70,11 +93,18 @@ export async function apiRequest<T = unknown>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${joinApiUrl(path)}${buildQuery(options.query)}`, {
-    method: options.method ?? (options.body !== undefined ? "POST" : "GET"),
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  const url = `${joinApiUrl(path)}${buildQuery(options.query)}`;
+
+  let response: Response;
+  try {
+    response = await net.fetch(url, {
+      method: options.method ?? (options.body !== undefined ? "POST" : "GET"),
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (err) {
+    throw new Error(networkErrorMessage(err));
+  }
 
   const contentType = response.headers.get("content-type") ?? "";
   const isJson = contentType.includes("application/json");
