@@ -8,7 +8,10 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { AppLocale, Sale, SaleHistoryGroup, SaleHistoryQuery } from "@teka/shared";
-import { SaleDetailSkeleton, SaleHistorySkeleton } from "../components/Skeleton";
+import {
+  SaleDetailSkeleton,
+  SaleHistorySkeleton,
+} from "../components/Skeleton";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { formatPrice } from "../hooks/useProducts";
 import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
@@ -159,6 +162,49 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
     [filteredGroups],
   );
 
+  const summary = useMemo(() => {
+    const sales = filteredGroups.flatMap((g) => g.ventes);
+    let revenue = 0;
+    let paid = 0;
+    let items = 0;
+    let withClient = 0;
+    let counter = 0;
+    for (const sale of sales) {
+      revenue += toNum(sale.montant_total);
+      paid += toNum(sale.montant_paye ?? sale.montant_total);
+      const lineItems = sale.items;
+      if (Array.isArray(lineItems) && lineItems.length > 0) {
+        items += lineItems.reduce((sum, line) => sum + (toNum(line.quantite) || 0), 0);
+      }
+      if (sale.client_nom?.trim() || sale.client_telephone?.trim()) withClient += 1;
+      else counter += 1;
+    }
+    const count = sales.length;
+    return {
+      count,
+      revenue: Math.round(revenue * 100) / 100,
+      paid: Math.round(paid * 100) / 100,
+      avg: count > 0 ? Math.round((revenue / count) * 100) / 100 : 0,
+      items,
+      withClient,
+      counter,
+      days: filteredGroups.length,
+    };
+  }, [filteredGroups]);
+
+  const rangeLabelKey = useMemo((): MessageKey => {
+    switch (range) {
+      case "today":
+        return "historyRangeToday";
+      case "7d":
+        return "historyRange7d";
+      case "30d":
+        return "historyRange30d";
+      default:
+        return "historyRangeAll";
+    }
+  }, [range]);
+
   const openDetail = useCallback(
     async (saleId: string) => {
       setSelectedId(saleId);
@@ -291,6 +337,49 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
             {t(locale, "historyRetry")}
           </button>
         </div>
+      ) : null}
+
+      {!loading && !error ? (
+        <section style={summarySection} aria-label={t(locale, "historySummaryPeriod")}>
+          <div style={summaryGrid}>
+            <SummaryCell
+              label={t(locale, "historySummaryPeriod")}
+              value={t(locale, rangeLabelKey)}
+            />
+            <SummaryCell
+              label={t(locale, "historySummarySales")}
+              value={String(summary.count)}
+            />
+            <SummaryCell
+              label={t(locale, "historySummaryRevenue")}
+              value={formatPrice(summary.revenue, locale, currency)}
+              emphasize
+            />
+            <SummaryCell
+              label={t(locale, "historySummaryAvg")}
+              value={summary.count > 0 ? formatPrice(summary.avg, locale, currency) : "—"}
+            />
+            <SummaryCell
+              label={t(locale, "historySummaryPaid")}
+              value={formatPrice(summary.paid, locale, currency)}
+            />
+            <SummaryCell
+              label={t(locale, "historySummaryItems")}
+              value={summary.items > 0 ? String(summary.items) : "—"}
+            />
+            <SummaryCell
+              label={t(locale, "historySummaryClients")}
+              value={`${summary.withClient}`}
+            />
+            <SummaryCell
+              label={t(locale, "historySummaryCounter")}
+              value={`${summary.counter}`}
+            />
+          </div>
+          {query.trim() ? (
+            <p style={summaryNote}>{t(locale, "historySummaryFiltered")}</p>
+          ) : null}
+        </section>
       ) : null}
 
       {loading ? (
@@ -573,11 +662,73 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SummaryCell({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div style={summaryCell}>
+      <span style={summaryLabel}>{label}</span>
+      <strong
+        style={{
+          fontSize: emphasize ? 18 : 15,
+          fontWeight: emphasize ? 800 : 700,
+          fontVariantNumeric: "tabular-nums",
+          wordBreak: "break-word",
+          lineHeight: 1.25,
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
 const toolbar: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   gap: 12,
   alignItems: "center",
+};
+
+const summarySection: CSSProperties = {
+  display: "grid",
+  gap: 8,
+};
+
+const summaryGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+  gap: 10,
+};
+
+const summaryCell: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid var(--tek-line)",
+  background: "var(--tek-card)",
+  minHeight: 64,
+};
+
+const summaryLabel: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 650,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "var(--tek-ash)",
+};
+
+const summaryNote: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: "var(--tek-ash)",
 };
 
 const searchInput: CSSProperties = {

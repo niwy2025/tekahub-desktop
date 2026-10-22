@@ -58,10 +58,41 @@ export function ProductListSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
+export function SaleHistorySummarySkeleton({ cells = 6 }: { cells?: number }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+        gap: 10,
+      }}
+      aria-busy="true"
+    >
+      {Array.from({ length: cells }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            display: "grid",
+            gap: 8,
+            padding: "12px 14px",
+            borderRadius: 12,
+            border: "1px solid var(--tek-line)",
+            background: "var(--tek-card)",
+          }}
+        >
+          <Skeleton height={10} width="45%" radius={4} />
+          <Skeleton height={18} width="70%" radius={6} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Skeleton liste historique : groupes + lignes tableau. */
 export function SaleHistorySkeleton({ groups = 2, rowsPerGroup = 4 }: { groups?: number; rowsPerGroup?: number }) {
   return (
     <div style={{ display: "grid", gap: 18 }} aria-busy="true" aria-live="polite">
+      <SaleHistorySummarySkeleton />
       {Array.from({ length: groups }, (_, g) => (
         <section key={g}>
           <div
