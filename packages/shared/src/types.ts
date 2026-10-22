@@ -91,6 +91,7 @@ export const IpcChannels = {
   listClients: "teka:list-clients",
   checkSaleClient: "teka:check-sale-client",
   createSale: "teka:create-sale",
+  cancelSale: "teka:cancel-sale",
   listSaleHistory: "teka:list-sale-history",
   getSaleDetail: "teka:get-sale-detail",
   getPrinterSettings: "teka:get-printer-settings",
@@ -216,6 +217,21 @@ export type SaleClientCheckResponse = {
   } | null;
 };
 
+export type PaymentMethod =
+  | "especes"
+  | "mobile_money"
+  | "carte_bancaire"
+  | "virement"
+  | "autre";
+
+export const PAYMENT_METHODS: PaymentMethod[] = [
+  "especes",
+  "mobile_money",
+  "carte_bancaire",
+  "virement",
+  "autre",
+];
+
 export type SaleLinePayload = {
   produit_id: string;
   quantite: number;
@@ -227,10 +243,20 @@ export type CreateSalePayload = {
   client_nom?: string | null;
   client_telephone?: string | null;
   client_email?: string | null;
-  moyen_paiement: string;
+  moyen_paiement: PaymentMethod | string;
   statut: string;
   montant_paye_initial?: number;
   lignes: SaleLinePayload[];
+};
+
+/** Soft-cancel : PUT /api/ventes/{id} avec statut annulee + lignes. */
+export type CancelSalePayload = {
+  saleId: string;
+  lignes: SaleLinePayload[];
+  moyen_paiement?: PaymentMethod | string | null;
+  client_id?: string | null;
+  client_nom?: string | null;
+  client_telephone?: string | null;
 };
 
 export type SaleItem = {

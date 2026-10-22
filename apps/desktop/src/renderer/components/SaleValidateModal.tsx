@@ -7,7 +7,8 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import type { AppLocale, CreateSalePayload } from "@teka/shared";
+import type { AppLocale, CreateSalePayload, PaymentMethod } from "@teka/shared";
+import { PAYMENT_METHODS } from "@teka/shared";
 import {
   findClientByPhone,
   getClientsSnapshot,
@@ -16,10 +17,18 @@ import {
 } from "../catalog/clientCatalogStore";
 import { formatPrice } from "../hooks/useProducts";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
-import { friendlyNetworkError, t } from "../i18n/messages";
+import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
 import type { CartLine } from "./CartPanel";
 
 type ClientStatus = "idle" | "checking" | "found" | "new" | "error";
+
+const PAYMENT_LABEL_KEY: Record<PaymentMethod, MessageKey> = {
+  especes: "salePayEspeces",
+  mobile_money: "salePayMobileMoney",
+  carte_bancaire: "salePayCarte",
+  virement: "salePayVirement",
+  autre: "salePayAutre",
+};
 
 type Props = {
   locale: AppLocale;
@@ -98,6 +107,7 @@ export function SaleValidateModal({
   const [status, setStatus] = useState<ClientStatus>("idle");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("especes");
   const [paidInput, setPaidInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -108,9 +118,14 @@ export function SaleValidateModal({
   const total = cart.reduce((sum, line) => sum + unitPrice(line) * line.qty, 0);
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
   const fullPhone = toFullPhone(phoneLocal);
-  const paidAmount = parseAmount(paidInput);
-  const changeAmount = Math.max(0, Math.round((paidAmount - total) * 100) / 100);
-  const remainingAmount = Math.max(0, Math.round((total - paidAmount) * 100) / 100);
+  const isCash = paymentMethod === "especes";
+  const paidAmount = isCash ? parseAmount(paidInput) : total;
+  const changeAmount = isCash
+    ? Math.max(0, Math.round((paidAmount - total) * 100) / 100)
+    : 0;
+  const remainingAmount = isCash
+    ? Math.max(0, Math.round((total - paidAmount) * 100) / 100)
+    : 0;
 
   useEffect(() => {
     phoneRef.current?.focus();
@@ -119,10 +134,14 @@ export function SaleValidateModal({
   useEffect(() => {
     if (!paymentOpen) return;
     requestAnimationFrame(() => {
-      paidRef.current?.focus();
-      paidRef.current?.select();
+      if (paymentMethod === "especes") {
+        paidRef.current?.focus();
+        paidRef.current?.select();
+      } else {
+        payConfirmRef.current?.focus();
+      }
     });
-  }, [paymentOpen]);
+  }, [paymentOpen, paymentMethod]);
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -211,6 +230,7 @@ export function SaleValidateModal({
     }
 
     setSubmitError(null);
+    setPaymentMethod("especes");
     setPaidInput(formatAmountInput(total));
     setPaymentOpen(true);
   }
@@ -219,7 +239,7 @@ export function SaleValidateModal({
     e?.preventDefault();
     if (submitting || cart.length === 0) return;
 
-    if (paidAmount + 0.0001 < total) {
+    if (isCash && paidAmount + 0.0001 < total) {
       setSubmitError(t(locale, "salePaidTooLow"));
       paidRef.current?.focus();
       return;
@@ -232,11 +252,11 @@ export function SaleValidateModal({
     setSubmitError(null);
 
     // L’API refuse montant_paye_initial > total.
-    // Les espèces reçues / monnaie à rendre restent un calcul caissier local.
+    // Espèces : monnaie locale caissier. Autres moyens : payé = total.
     const payload: CreateSalePayload = {
-      moyen_paiement: "especes",
+      moyen_paiement: paymentMethod,
       statut: "validee",
-      montant_paye_initial: Math.min(paidAmount, total),
+      montant_paye_initial: Math.min(isCash ? paidAmount : total, total),
       lignes: cart.map((line) => ({
         produit_id: line.product.id,
         quantite: line.qty,
@@ -285,8 +305,8 @@ export function SaleValidateModal({
                 total: unit * line.qty,
               };
             }),
-            cashReceived: paidAmount,
-            changeDue: changeAmount,
+            cashReceived: isCash ? paidAmount : null,
+            changeDue: isCash ? changeAmount : null,
           });
         }
       } catch {
@@ -383,7 +403,7 @@ export function SaleValidateModal({
               </strong>
             </div>
             <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--tek-ash)" }}>
-              {t(locale, "salePaymentCash")}
+              {t(locale, "salePaymentMethod")}
             </p>
           </section>
 
@@ -514,10 +534,30 @@ export function SaleValidateModal({
               style={payDialog}
               onClick={(e) => e.stopPropagation()}
             >
-              <p style={eyebrow}>{t(locale, "salePaymentCash")}</p>
+              <p style={eyebrow}>{t(locale, "salePaymentMethod")}</p>
               <h3 id="sale-pay-title" style={{ margin: "4px 0 0", fontSize: 20 }}>
                 {t(locale, "salePaidTitle")}
               </h3>
+
+              <div style={payMethodRow} role="group" aria-label={t(locale, "salePaymentMethod")}>
+                {PAYMENT_METHODS.map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => {
+                      setPaymentMethod(method);
+                      setSubmitError(null);
+                      if (method === "especes") {
+                        setPaidInput(formatAmountInput(total));
+                      }
+                    }}
+                    style={paymentMethod === method ? payChipActive : payChip}
+                  >
+                    {t(locale, PAYMENT_LABEL_KEY[method])}
+                  </button>
+                ))}
+              </div>
 
               <div style={payTotalBox}>
                 <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
@@ -528,49 +568,55 @@ export function SaleValidateModal({
                 </strong>
               </div>
 
-              <label style={payLabel}>
-                {t(locale, "salePaidLabel")}
-                <input
-                  ref={paidRef}
-                  type="text"
-                  inputMode="decimal"
-                  value={paidInput}
-                  disabled={submitting}
-                  onChange={(e) => {
-                    setPaidInput(e.target.value);
-                    setSubmitError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void submitSale();
-                    }
-                  }}
-                  style={payInput}
-                />
-              </label>
+              {isCash ? (
+                <>
+                  <label style={payLabel}>
+                    {t(locale, "salePaidLabel")}
+                    <input
+                      ref={paidRef}
+                      type="text"
+                      inputMode="decimal"
+                      value={paidInput}
+                      disabled={submitting}
+                      onChange={(e) => {
+                        setPaidInput(e.target.value);
+                        setSubmitError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void submitSale();
+                        }
+                      }}
+                      style={payInput}
+                    />
+                  </label>
 
-              <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
-                {changeAmount > 0 ? (
-                  <>
-                    <span>{t(locale, "saleChangeLabel")}</span>
-                    <strong>{formatPrice(changeAmount, locale, currency)}</strong>
-                  </>
-                ) : remainingAmount > 0.005 ? (
-                  <>
-                    <span>{t(locale, "saleRemainingLabel")}</span>
-                    <strong>{formatPrice(remainingAmount, locale, currency)}</strong>
-                  </>
-                ) : (
-                  <>
-                    <span>{t(locale, "saleChangeLabel")}</span>
-                    <strong>{formatPrice(0, locale, currency)}</strong>
-                  </>
-                )}
-              </div>
-              {changeAmount > 0 ? (
-                <p style={payHint}>{t(locale, "saleChangeHint")}</p>
-              ) : null}
+                  <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
+                    {changeAmount > 0 ? (
+                      <>
+                        <span>{t(locale, "saleChangeLabel")}</span>
+                        <strong>{formatPrice(changeAmount, locale, currency)}</strong>
+                      </>
+                    ) : remainingAmount > 0.005 ? (
+                      <>
+                        <span>{t(locale, "saleRemainingLabel")}</span>
+                        <strong>{formatPrice(remainingAmount, locale, currency)}</strong>
+                      </>
+                    ) : (
+                      <>
+                        <span>{t(locale, "saleChangeLabel")}</span>
+                        <strong>{formatPrice(0, locale, currency)}</strong>
+                      </>
+                    )}
+                  </div>
+                  {changeAmount > 0 ? (
+                    <p style={payHint}>{t(locale, "saleChangeHint")}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p style={payHint}>{t(locale, "salePayOtherHint")}</p>
+              )}
 
               {submitError ? (
                 <p style={{ margin: "12px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
@@ -589,7 +635,9 @@ export function SaleValidateModal({
                     opacity: submitting ? 0.7 : 1,
                   }}
                 >
-                  {submitting ? t(locale, "saleSubmitting") : t(locale, "salePaidConfirm")}
+                  {submitting
+                    ? t(locale, "saleSubmitting")
+                    : t(locale, isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
                 </button>
                 <button
                   type="button"
@@ -863,6 +911,31 @@ const payDialog: CSSProperties = {
   border: "1px solid var(--tek-line)",
   boxShadow: "var(--tek-shadow)",
   padding: 20,
+};
+
+const payMethodRow: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  marginTop: 14,
+};
+
+const payChip: CSSProperties = {
+  border: "1px solid var(--tek-line)",
+  background: "transparent",
+  color: "var(--tek-ink)",
+  padding: "8px 12px",
+  borderRadius: 999,
+  fontWeight: 650,
+  fontSize: 12,
+  cursor: "pointer",
+};
+
+const payChipActive: CSSProperties = {
+  ...payChip,
+  border: "1px solid transparent",
+  background: "var(--tek-yellow)",
+  color: "var(--tek-black)",
 };
 
 const payTotalBox: CSSProperties = {

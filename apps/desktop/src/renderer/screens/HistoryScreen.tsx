@@ -16,6 +16,32 @@ import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { formatPrice } from "../hooks/useProducts";
 import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
 
+function isCancelled(statut?: string | null): boolean {
+  return (statut ?? "").toLowerCase().includes("annul");
+}
+
+function isValidated(statut?: string | null): boolean {
+  const s = (statut ?? "").toLowerCase();
+  return s.includes("valid") || s === "completed" || s === "paid";
+}
+
+function paymentLabel(locale: AppLocale, moyen?: string | null): string {
+  switch ((moyen ?? "").toLowerCase()) {
+    case "especes":
+      return t(locale, "salePayEspeces");
+    case "mobile_money":
+      return t(locale, "salePayMobileMoney");
+    case "carte_bancaire":
+      return t(locale, "salePayCarte");
+    case "virement":
+      return t(locale, "salePayVirement");
+    case "autre":
+      return t(locale, "salePayAutre");
+    default:
+      return moyen?.trim() || "—";
+  }
+}
+
 type RangePreset = "all" | "today" | "7d" | "30d";
 
 type Props = {
@@ -113,6 +139,9 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
   const [printBusy, setPrintBusy] = useState(false);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [printOk, setPrintOk] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,12 +193,13 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
 
   const summary = useMemo(() => {
     const sales = filteredGroups.flatMap((g) => g.ventes);
+    const active = sales.filter((s) => !isCancelled(s.statut));
     let revenue = 0;
     let paid = 0;
     let items = 0;
     let withClient = 0;
     let counter = 0;
-    for (const sale of sales) {
+    for (const sale of active) {
       revenue += toNum(sale.montant_total);
       paid += toNum(sale.montant_paye ?? sale.montant_total);
       const lineItems = sale.items;
@@ -179,7 +209,7 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
       if (sale.client_nom?.trim() || sale.client_telephone?.trim()) withClient += 1;
       else counter += 1;
     }
-    const count = sales.length;
+    const count = active.length;
     return {
       count,
       revenue: Math.round(revenue * 100) / 100,
@@ -211,6 +241,8 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
       setDetail(null);
       setDetailError(null);
       setPrintMsg(null);
+      setCancelConfirm(false);
+      setCancelMsg(null);
       setDetailLoading(true);
       try {
         const sale = await window.teka.getSaleDetail(saleId);
@@ -229,7 +261,45 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
     setDetail(null);
     setDetailError(null);
     setPrintMsg(null);
+    setCancelConfirm(false);
+    setCancelMsg(null);
     searchRef.current?.focus();
+  }
+
+  async function confirmCancelSale() {
+    if (!detail || cancelBusy || !isValidated(detail.statut)) return;
+    const lignes = (detail.items ?? [])
+      .map((item) => ({
+        produit_id: String(item.produit_id ?? ""),
+        quantite: Math.max(1, Math.round(toNum(item.quantite) || 1)),
+        prix_unitaire: toNum(item.prix_unitaire) || undefined,
+      }))
+      .filter((line) => Boolean(line.produit_id));
+
+    if (lignes.length === 0) {
+      setCancelMsg(t(locale, "historyCancelError"));
+      return;
+    }
+
+    setCancelBusy(true);
+    setCancelMsg(null);
+    try {
+      const updated = await window.teka.cancelSale({
+        saleId: detail.id,
+        lignes,
+        moyen_paiement: detail.moyen_paiement ?? "especes",
+        client_nom: detail.client_nom ?? null,
+        client_telephone: detail.client_telephone ?? null,
+      });
+      setDetail({ ...detail, ...updated, statut: updated.statut ?? "annulee" });
+      setCancelConfirm(false);
+      setCancelMsg(t(locale, "historyCancelOk"));
+      void load();
+    } catch (err) {
+      setCancelMsg(friendlyNetworkError(locale, err, "historyCancelError"));
+    } finally {
+      setCancelBusy(false);
+    }
   }
 
   async function reprint() {
@@ -480,8 +550,17 @@ export function HistoryScreen({ locale, currency, companyName, branchName }: Pro
           printBusy={printBusy}
           printMsg={printMsg}
           printOk={printOk}
+          cancelBusy={cancelBusy}
+          cancelConfirm={cancelConfirm}
+          cancelMsg={cancelMsg}
           onClose={closeDetail}
           onPrint={() => void reprint()}
+          onAskCancel={() => {
+            setCancelConfirm(true);
+            setCancelMsg(null);
+          }}
+          onAbortCancel={() => setCancelConfirm(false)}
+          onConfirmCancel={() => void confirmCancelSale()}
         />
       ) : null}
     </div>
@@ -497,8 +576,14 @@ function SaleDetailModal({
   printBusy,
   printMsg,
   printOk,
+  cancelBusy,
+  cancelConfirm,
+  cancelMsg,
   onClose,
   onPrint,
+  onAskCancel,
+  onAbortCancel,
+  onConfirmCancel,
 }: {
   locale: AppLocale;
   currency?: string | null;
@@ -508,8 +593,14 @@ function SaleDetailModal({
   printBusy: boolean;
   printMsg: string | null;
   printOk: boolean;
+  cancelBusy: boolean;
+  cancelConfirm: boolean;
+  cancelMsg: string | null;
   onClose: () => void;
   onPrint: () => void;
+  onAskCancel: () => void;
+  onAbortCancel: () => void;
+  onConfirmCancel: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, true);
@@ -519,14 +610,19 @@ function SaleDetailModal({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+        if (cancelConfirm && !cancelBusy) {
+          onAbortCancel();
+          return;
+        }
         onClose();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, [onClose, cancelConfirm, cancelBusy, onAbortCancel]);
 
   const cur = currency ?? sale?.devise_principale ?? null;
+  const canCancel = Boolean(sale && isValidated(sale.statut) && !isCancelled(sale.statut));
 
   return (
     <div role="presentation" style={backdrop} onClick={onClose}>
@@ -546,7 +642,7 @@ function SaleDetailModal({
               {t(locale, "historyDetailTitle")}
             </h2>
           </div>
-          <button type="button" onClick={onClose} style={ghostBtn}>
+          <button type="button" onClick={onClose} style={ghostBtn} disabled={cancelBusy}>
             Esc
           </button>
         </header>
@@ -571,6 +667,10 @@ function SaleDetailModal({
                 }
               />
               <Meta label={t(locale, "historyColStatus")} value={statusLabel(locale, sale.statut)} />
+              <Meta
+                label={t(locale, "historyColPayment")}
+                value={paymentLabel(locale, sale.moyen_paiement)}
+              />
             </div>
 
             <h3 style={{ margin: "18px 0 10px", fontSize: 14 }}>
@@ -633,19 +733,70 @@ function SaleDetailModal({
               </p>
             ) : null}
 
-            <div style={actions}>
-              <button
-                type="button"
-                disabled={printBusy}
-                onClick={onPrint}
-                style={{ ...primaryBtn, opacity: printBusy ? 0.7 : 1 }}
+            {cancelMsg ? (
+              <p
+                style={{
+                  margin: "12px 0 0",
+                  fontSize: 13,
+                  color: cancelMsg === t(locale, "historyCancelOk") ? "#15803d" : "var(--tek-danger)",
+                }}
               >
-                {printBusy ? t(locale, "historyDetailPrinting") : t(locale, "historyDetailPrint")}
-              </button>
-              <button type="button" onClick={onClose} style={cancelBtn}>
-                {t(locale, "historyDetailClose")}
-              </button>
-            </div>
+                {cancelMsg}
+              </p>
+            ) : null}
+
+            {cancelConfirm ? (
+              <div style={cancelConfirmBox}>
+                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>
+                  {t(locale, "historyCancelConfirm")}
+                </p>
+                <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={onConfirmCancel}
+                    style={{ ...dangerBtn, opacity: cancelBusy ? 0.7 : 1 }}
+                  >
+                    {cancelBusy ? t(locale, "historyCancelling") : t(locale, "historyCancelYes")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={onAbortCancel}
+                    style={cancelBtn}
+                  >
+                    {t(locale, "historyCancelNo")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={actions}>
+                <button
+                  type="button"
+                  disabled={printBusy || cancelBusy || isCancelled(sale.statut)}
+                  onClick={onPrint}
+                  style={{
+                    ...primaryBtn,
+                    opacity: printBusy || isCancelled(sale.statut) ? 0.7 : 1,
+                  }}
+                >
+                  {printBusy ? t(locale, "historyDetailPrinting") : t(locale, "historyDetailPrint")}
+                </button>
+                {canCancel ? (
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={onAskCancel}
+                    style={dangerGhostBtn}
+                  >
+                    {t(locale, "historyCancel")}
+                  </button>
+                ) : null}
+                <button type="button" onClick={onClose} style={cancelBtn} disabled={cancelBusy}>
+                  {t(locale, "historyDetailClose")}
+                </button>
+              </div>
+            )}
           </>
         ) : null}
       </div>
@@ -895,9 +1046,39 @@ const totalRow: CSSProperties = {
 
 const actions: CSSProperties = {
   marginTop: 18,
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
+  display: "flex",
+  flexWrap: "wrap",
   gap: 10,
+};
+
+const cancelConfirmBox: CSSProperties = {
+  marginTop: 16,
+  padding: 14,
+  borderRadius: 12,
+  border: "1px solid rgba(192, 38, 38, 0.35)",
+  background: "rgba(192, 38, 38, 0.08)",
+};
+
+const dangerBtn: CSSProperties = {
+  border: "none",
+  borderRadius: 14,
+  padding: "12px 16px",
+  background: "#b91c1c",
+  color: "#fff",
+  fontWeight: 700,
+  fontSize: 14,
+  cursor: "pointer",
+};
+
+const dangerGhostBtn: CSSProperties = {
+  border: "1px solid rgba(185, 28, 28, 0.45)",
+  borderRadius: 14,
+  padding: "12px 16px",
+  background: "transparent",
+  color: "#b91c1c",
+  fontWeight: 650,
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const primaryBtn: CSSProperties = {

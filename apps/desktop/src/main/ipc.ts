@@ -9,6 +9,7 @@ import {
   type PackLocalState,
   type PackUpdateState,
   type Client,
+  type CancelSalePayload,
   type CreateSalePayload,
   type PrinterInfo,
   type PrinterSettings,
@@ -29,7 +30,13 @@ import { listProducts } from "./catalog";
 import { listAllClients } from "./clients";
 import { printSaleReceipt } from "./print-receipt";
 import { getPrinterSettings, setPrinterSettings } from "./printer-settings";
-import { checkSaleClient, createSale, getSaleDetail, listSaleHistory } from "./sales";
+import {
+  cancelSale,
+  checkSaleClient,
+  createSale,
+  getSaleDetail,
+  listSaleHistory,
+} from "./sales";
 import { appConfig } from "./config";
 import { getAppLocale, getDeviceLocale, setAppLocale } from "./locale";
 import { getAppPaths } from "./paths";
@@ -188,6 +195,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async (_e, payload: CreateSalePayload): Promise<Sale> => {
       try {
         return await createSale(payload);
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.cancelSale,
+    async (_e, payload: CancelSalePayload): Promise<Sale> => {
+      try {
+        return await cancelSale(payload);
       } catch (err) {
         throw toIpcError(err);
       }

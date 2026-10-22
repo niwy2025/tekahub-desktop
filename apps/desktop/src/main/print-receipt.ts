@@ -52,7 +52,13 @@ function labels(locale: AppLocale) {
       change: "Change",
       thanks: "Thank you",
       payment: "Payment",
-      cashMethod: "Cash",
+      method: {
+        especes: "Cash",
+        mobile_money: "Mobile money",
+        carte_bancaire: "Card",
+        virement: "Transfer",
+        autre: "Other",
+      },
     };
   }
   return {
@@ -68,8 +74,23 @@ function labels(locale: AppLocale) {
     change: "À rendre",
     thanks: "Merci",
     payment: "Paiement",
-    cashMethod: "Espèces",
+    method: {
+      especes: "Espèces",
+      mobile_money: "Mobile money",
+      carte_bancaire: "Carte",
+      virement: "Virement",
+      autre: "Autre",
+    },
   };
+}
+
+function paymentMethodLabel(
+  locale: AppLocale,
+  moyen?: string | null,
+): string {
+  const L = labels(locale);
+  const key = (moyen ?? "especes") as keyof typeof L.method;
+  return L.method[key] ?? moyen ?? L.method.especes;
 }
 
 export function buildReceiptHtml(payload: SaleReceiptPayload): string {
@@ -139,7 +160,9 @@ export function buildReceiptHtml(payload: SaleReceiptPayload): string {
   <div class="row"><span>${L.ref}</span><span>${escapeHtml(payload.sale.reference || payload.sale.id)}</span></div>
   <div class="row"><span>${L.date}</span><span>${escapeHtml(formatWhen(payload.locale, payload.sale.date_vente))}</span></div>
   <div class="row"><span>${L.client}</span><span>${escapeHtml(client)}</span></div>
-  <div class="row"><span>${L.payment}</span><span>${L.cashMethod}</span></div>
+  <div class="row"><span>${L.payment}</span><span>${escapeHtml(
+    paymentMethodLabel(payload.locale, payload.sale.moyen_paiement),
+  )}</span></div>
   <div class="rule"></div>
   <table>
     <thead>

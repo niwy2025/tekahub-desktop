@@ -1,4 +1,5 @@
 import type {
+  CancelSalePayload,
   CreateSalePayload,
   Sale,
   SaleClientCheckPayload,
@@ -66,4 +67,24 @@ export async function getSaleDetail(saleId: string): Promise<Sale> {
     return payload.data;
   }
   return payload as Sale;
+}
+
+/** Soft-cancel POS : statut annulee (restaure stock côté API). */
+export async function cancelSale(payload: CancelSalePayload): Promise<Sale> {
+  const data = await apiRequest<Sale | { data?: Sale }>(`/api/ventes/${payload.saleId}`, {
+    method: "PUT",
+    body: {
+      statut: "annulee",
+      moyen_paiement: payload.moyen_paiement ?? "especes",
+      client_id: payload.client_id ?? undefined,
+      client_nom: payload.client_nom ?? undefined,
+      client_telephone: payload.client_telephone ?? undefined,
+      lignes: payload.lignes,
+    },
+  });
+
+  if (data && typeof data === "object" && "data" in data && data.data) {
+    return data.data;
+  }
+  return data as Sale;
 }
