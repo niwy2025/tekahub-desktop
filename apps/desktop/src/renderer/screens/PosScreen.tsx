@@ -7,6 +7,7 @@ import {
   type RefObject,
 } from "react";
 import type { AppLocale, Product } from "@teka/shared";
+import { CartPanel, type CartLine } from "../components/CartPanel";
 import { ProductListSkeleton } from "../components/Skeleton";
 import { formatPrice, useProducts } from "../hooks/useProducts";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
@@ -25,7 +26,7 @@ export function PosScreen({
   const searchRef = searchRefExternal ?? localRef;
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [cart, setCart] = useState<Array<{ product: Product; qty: number }>>([]);
+  const [cart, setCart] = useState<CartLine[]>([]);
   useAutoFocus(searchRef);
 
   const { products, loading, error } = useProducts(query);
@@ -52,6 +53,32 @@ export function PosScreen({
     });
     setSelectedId(product.id);
     searchRef.current?.focus();
+  }
+
+  function increment(productId: string) {
+    setCart((prev) =>
+      prev.map((line) =>
+        line.product.id === productId ? { ...line, qty: line.qty + 1 } : line,
+      ),
+    );
+  }
+
+  function decrement(productId: string) {
+    setCart((prev) =>
+      prev
+        .map((line) =>
+          line.product.id === productId ? { ...line, qty: line.qty - 1 } : line,
+        )
+        .filter((line) => line.qty > 0),
+    );
+  }
+
+  function removeLine(productId: string) {
+    setCart((prev) => prev.filter((line) => line.product.id !== productId));
+  }
+
+  function clearCart() {
+    setCart([]);
   }
 
   function onSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -90,9 +117,10 @@ export function PosScreen({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)",
+          gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
           gap: 16,
           minHeight: 0,
+          alignItems: "stretch",
         }}
       >
         <section style={panel}>
@@ -161,43 +189,15 @@ export function PosScreen({
           </div>
         </section>
 
-        <aside style={panel} tabIndex={0} aria-label={t(locale, "posCart")}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16 }}>{t(locale, "posCart")}</h2>
-          {cart.length === 0 ? (
-            <p style={{ margin: 0, color: "var(--tek-ash)", fontSize: 14 }}>
-              {t(locale, "posCartEmpty")}
-            </p>
-          ) : (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {cart.map((line) => (
-                <li
-                  key={line.product.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    padding: "10px 0",
-                    borderBottom: "1px solid var(--tek-line)",
-                    fontSize: 13,
-                  }}
-                >
-                  <span>
-                    {line.product.nom}
-                    <span style={{ color: "var(--tek-ash)" }}> × {line.qty}</span>
-                  </span>
-                  <strong>
-                    {formatPrice(
-                      Number(line.product.prix_vente_ttc ?? line.product.prix_vente ?? 0) *
-                        line.qty,
-                      locale,
-                      currency,
-                    )}
-                  </strong>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
+        <CartPanel
+          locale={locale}
+          currency={currency}
+          cart={cart}
+          onIncrement={increment}
+          onDecrement={decrement}
+          onRemove={removeLine}
+          onClear={clearCart}
+        />
       </div>
     </div>
   );
