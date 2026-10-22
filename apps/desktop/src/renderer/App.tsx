@@ -14,7 +14,7 @@ import {
   navigateModuleHash,
   syncModuleHash,
 } from "./navigation/moduleRoute";
-import { PlaceholderScreen } from "./screens/PlaceholderScreen";
+import { CustomersScreen } from "./screens/CustomersScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
 import { PosScreen, type PosScreenHandle } from "./screens/PosScreen";
 import { ProductsScreen } from "./screens/ProductsScreen";
@@ -150,7 +150,7 @@ export function App() {
       content = <ProductsScreen locale={locale} currency={currency} />;
       break;
     case "customers":
-      content = <PlaceholderScreen locale={locale} titleKey="customersTitle" />;
+      content = <CustomersScreen locale={locale} currency={currency} />;
       break;
     case "history":
       content = (

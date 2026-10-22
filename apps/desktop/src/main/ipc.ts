@@ -9,6 +9,7 @@ import {
   type PackLocalState,
   type PackUpdateState,
   type Client,
+  type ClientStatsResponse,
   type CreateSalePayload,
   type PrinterInfo,
   type PrinterSettings,
@@ -26,7 +27,7 @@ import {
 import { fetchMe, getSessionInfo, login, logout, restoreSession } from "./auth";
 import { ApiError, setUnauthorizedHandler } from "./api-client";
 import { listProducts } from "./catalog";
-import { listAllClients } from "./clients";
+import { getClientStats, listAllClients } from "./clients";
 import { printSaleReceipt } from "./print-receipt";
 import { getPrinterSettings, setPrinterSettings } from "./printer-settings";
 import { checkSaleClient, createSale, getSaleDetail, listSaleHistory } from "./sales";
@@ -171,6 +172,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       throw toIpcError(err);
     }
   });
+
+  ipcMain.handle(
+    IpcChannels.getClientStats,
+    async (_e, clientId: string): Promise<ClientStatsResponse> => {
+      try {
+        return await getClientStats(clientId);
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
 
   ipcMain.handle(
     IpcChannels.checkSaleClient,

@@ -25,6 +25,53 @@ export function Skeleton({
   );
 }
 
+export function ClientListSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--tek-line)",
+        borderRadius: 14,
+        overflow: "hidden",
+        background: "var(--tek-card)",
+      }}
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 1.1fr 1.2fr",
+          gap: 8,
+          padding: "10px 12px",
+          borderBottom: "1px solid var(--tek-line)",
+          background: "rgba(0,0,0,0.03)",
+        }}
+      >
+        <Skeleton height={10} width="35%" radius={4} />
+        <Skeleton height={10} width="40%" radius={4} />
+        <Skeleton height={10} width="30%" radius={4} />
+      </div>
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.4fr 1.1fr 1.2fr",
+            gap: 8,
+            alignItems: "center",
+            padding: "14px 12px",
+            borderBottom: i < rows - 1 ? "1px solid var(--tek-line)" : undefined,
+          }}
+        >
+          <Skeleton height={14} width={`${50 + ((i * 9) % 35)}%`} radius={6} />
+          <Skeleton height={12} width={`${55 + ((i * 5) % 30)}%`} radius={6} />
+          <Skeleton height={12} width={`${40 + ((i * 7) % 40)}%`} radius={6} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ProductListSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div

@@ -9,6 +9,7 @@ import {
   type PackLocalState,
   type PackUpdateState,
   type Client,
+  type ClientStatsResponse,
   type CreateSalePayload,
   type PrinterInfo,
   type PrinterSettings,
@@ -63,6 +64,8 @@ const api = {
   listProducts: (query?: ProductListQuery): Promise<Product[]> =>
     ipcRenderer.invoke(IpcChannels.listProducts, query),
   listClients: (): Promise<Client[]> => ipcRenderer.invoke(IpcChannels.listClients),
+  getClientStats: (clientId: string): Promise<ClientStatsResponse> =>
+    ipcRenderer.invoke(IpcChannels.getClientStats, clientId),
   checkSaleClient: (payload: SaleClientCheckPayload): Promise<SaleClientCheckResponse> =>
     ipcRenderer.invoke(IpcChannels.checkSaleClient, payload),
   createSale: (payload: CreateSalePayload): Promise<Sale> =>
