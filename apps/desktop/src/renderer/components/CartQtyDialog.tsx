@@ -55,7 +55,8 @@ export function CartQtyDialog({
         e.key === "Add" ||
         e.key === "Subtract";
 
-      if (isQtyKey && (e.repeat || Date.now() - openedAt < 120)) {
+      // La touche qui ouvre le modal (ou son key-repeat) ne doit pas multiplier la qty.
+      if (isQtyKey && Date.now() - openedAt < 180) {
         e.preventDefault();
         e.stopPropagation();
         return;
