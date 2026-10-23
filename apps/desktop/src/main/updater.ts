@@ -83,13 +83,25 @@ export function configureAutoUpdater(getWindow: () => BrowserWindow | null): voi
 
   autoUpdater.on("error", (err) => {
     // In unpackaged / local dev, updater errors are expected — stay quiet-ish
-    const msg = err?.message ?? String(err);
+    const raw = err?.message ?? String(err);
+    const msg = explainUpdaterError(raw);
     setState(getWindow(), {
       status: app.isPackaged ? "error" : "up-to-date",
-      error: msg,
-      message: app.isPackaged ? "Erreur de mise à jour" : "À jour (dev)",
+      error: raw,
+      message: app.isPackaged ? msg : "À jour (dev)",
     });
   });
+}
+
+function explainUpdaterError(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes("404") || lower.includes("not found")) {
+    return "Mise à jour inaccessible (dépôt privé ou release manquante)";
+  }
+  if (lower.includes("401") || lower.includes("403") || lower.includes("bad credentials")) {
+    return "Accès GitHub refusé — le dépôt des releases doit être public";
+  }
+  return "Erreur de mise à jour";
 }
 
 export async function checkShellUpdates(): Promise<ShellUpdateState> {
@@ -104,11 +116,12 @@ export async function checkShellUpdates(): Promise<ShellUpdateState> {
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
     state = {
       ...state,
       status: "error",
-      error: err instanceof Error ? err.message : String(err),
-      message: "Erreur de mise à jour",
+      error: raw,
+      message: explainUpdaterError(raw),
     };
   }
   return state;
