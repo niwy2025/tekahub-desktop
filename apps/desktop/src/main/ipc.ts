@@ -11,6 +11,8 @@ import {
   type Client,
   type CancelSalePayload,
   type CreateSalePayload,
+  type ConnectionSettings,
+  type ConnectionSettingsView,
   type PrinterInfo,
   type PrinterSettings,
   type Product,
@@ -30,6 +32,11 @@ import { listProducts } from "./catalog";
 import { listAllClients } from "./clients";
 import { printSaleReceipt } from "./print-receipt";
 import { getPrinterSettings, setPrinterSettings } from "./printer-settings";
+import {
+  DEFAULT_API_BASE_URL,
+  getConnectionSettings,
+  setConnectionSettings,
+} from "./connection-settings";
 import {
   cancelSale,
   checkSaleClient,
@@ -239,6 +246,36 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(
     IpcChannels.setPrinterSettings,
     (_e, patch: Partial<PrinterSettings>): PrinterSettings => setPrinterSettings(patch ?? {}),
+  );
+
+  ipcMain.handle(IpcChannels.getConnectionSettings, (): ConnectionSettingsView => {
+    const saved = getConnectionSettings();
+    const fromEnv = Boolean(process.env.API_BASE_URL?.trim());
+    return {
+      ...saved,
+      effectiveApiBaseUrl: appConfig.apiBaseUrl,
+      defaultApiBaseUrl: DEFAULT_API_BASE_URL,
+      fromEnv,
+    };
+  });
+
+  ipcMain.handle(
+    IpcChannels.setConnectionSettings,
+    (_e, patch: Partial<ConnectionSettings>): ConnectionSettingsView => {
+      try {
+        setConnectionSettings(patch ?? {});
+        const saved = getConnectionSettings();
+        const fromEnv = Boolean(process.env.API_BASE_URL?.trim());
+        return {
+          ...saved,
+          effectiveApiBaseUrl: appConfig.apiBaseUrl,
+          defaultApiBaseUrl: DEFAULT_API_BASE_URL,
+          fromEnv,
+        };
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
   );
 
   ipcMain.handle(

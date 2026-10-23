@@ -13,8 +13,20 @@ export const messages = {
     signIn: "Se connecter",
     signingIn: "Connexion…",
     fillAllFields: "Veuillez remplir tous les champs",
-    apiMissing: "API_BASE_URL n’est pas configurée dans .env",
-    apiMissingHint: "Configure API_BASE_URL dans .env puis relance l’app.",
+    apiMissing: "L’URL du serveur API n’est pas configurée",
+    apiMissingHint:
+      "Indique l’adresse du serveur ci-dessous (ex. https://api-tekahub.niwytech.cloud), puis connecte-toi.",
+    connectionSection: "Connexion serveur",
+    connectionHint:
+      "Adresse de l’API TekaHub. Enregistrée sur cet ordinateur (pas besoin de fichier .env).",
+    connectionApiUrl: "URL de l’API",
+    connectionApiPlaceholder: "https://api-tekahub.niwytech.cloud",
+    connectionSave: "Enregistrer",
+    connectionSaved: "Adresse serveur enregistrée",
+    connectionLoadError: "Impossible de charger la connexion",
+    connectionEnvOverride:
+      "Cette URL est forcée par l’environnement (.env). Le fichier local ne s’applique pas tant que API_BASE_URL est défini.",
+    connectionResetDefault: "Réinitialiser au défaut",
     loginError: "Erreur de connexion",
     chooseProfile: "Choisir un profil",
     chooseProfileHint:
@@ -286,8 +298,20 @@ export const messages = {
     signIn: "Sign in",
     signingIn: "Signing in…",
     fillAllFields: "Please fill in all fields",
-    apiMissing: "API_BASE_URL is not configured in .env",
-    apiMissingHint: "Set API_BASE_URL in .env then restart the app.",
+    apiMissing: "API server URL is not configured",
+    apiMissingHint:
+      "Enter the server address below (e.g. https://api-tekahub.niwytech.cloud), then sign in.",
+    connectionSection: "Server connection",
+    connectionHint:
+      "TekaHub API address. Saved on this computer (no .env file needed).",
+    connectionApiUrl: "API URL",
+    connectionApiPlaceholder: "https://api-tekahub.niwytech.cloud",
+    connectionSave: "Save",
+    connectionSaved: "Server address saved",
+    connectionLoadError: "Could not load connection settings",
+    connectionEnvOverride:
+      "This URL is forced by the environment (.env). The local file is ignored while API_BASE_URL is set.",
+    connectionResetDefault: "Reset to default",
     loginError: "Sign-in failed",
     chooseProfile: "Choose a profile",
     chooseProfileHint:

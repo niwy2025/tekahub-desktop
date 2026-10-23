@@ -103,6 +103,14 @@ export function useAuth() {
     setLocaleState(normalizeLocale(info.locale));
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    const { session: nextSession, user: nextUser, locale: nextLocale } =
+      await window.teka.getSession();
+    setSession(nextSession);
+    setUser(nextUser);
+    setLocaleState(normalizeLocale(nextLocale.locale));
+  }, []);
+
   return {
     booting,
     user,
@@ -113,6 +121,7 @@ export function useAuth() {
     setLocale,
     login,
     logout,
+    refreshSession,
     clearProfiles: () => setProfiles([]),
   };
 }

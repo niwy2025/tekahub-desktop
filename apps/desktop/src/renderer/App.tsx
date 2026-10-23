@@ -34,6 +34,7 @@ export function App() {
     setLocale,
     login,
     logout,
+    refreshSession,
     clearProfiles,
   } = useAuth();
   const updates = useUpdates(Boolean(user));
@@ -122,6 +123,8 @@ export function App() {
         locale={locale}
         onLocaleChange={(next) => void setLocale(next)}
         apiConfigured={session?.apiConfigured ?? false}
+        apiBaseUrl={session?.apiBaseUrl ?? null}
+        onConnectionSaved={refreshSession}
         profiles={profiles}
         onClearProfiles={clearProfiles}
         onLogin={login}

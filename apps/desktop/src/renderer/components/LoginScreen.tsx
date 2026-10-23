@@ -1,5 +1,5 @@
-import { useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import type { AppLocale, AuthSelectableProfile } from "@teka/shared";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import type { AppLocale, AuthSelectableProfile, ConnectionSettingsView } from "@teka/shared";
 import logo from "../assets/teka-hub-logo.svg";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
 import { t } from "../i18n/messages";
@@ -9,6 +9,8 @@ type Props = {
   locale: AppLocale;
   onLocaleChange: (locale: AppLocale) => void;
   apiConfigured: boolean;
+  apiBaseUrl: string | null;
+  onConnectionSaved: () => Promise<void>;
   onLogin: (
     loginId: string,
     password: string,
@@ -22,6 +24,8 @@ export function LoginScreen({
   locale,
   onLocaleChange,
   apiConfigured,
+  apiBaseUrl,
+  onConnectionSaved,
   onLogin,
   profiles,
   onClearProfiles,
@@ -31,8 +35,47 @@ export function LoginScreen({
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiDraft, setApiDraft] = useState(apiBaseUrl ?? "");
+  const [connection, setConnection] = useState<ConnectionSettingsView | null>(null);
+  const [savingApi, setSavingApi] = useState(false);
+  const [apiSavedMsg, setApiSavedMsg] = useState<string | null>(null);
   const loginRef = useRef<HTMLInputElement>(null);
   useAutoFocus(loginRef);
+
+  useEffect(() => {
+    if (typeof window.teka?.getConnectionSettings !== "function") return;
+    void window.teka
+      .getConnectionSettings()
+      .then((next) => {
+        setConnection(next);
+        setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
+      })
+      .catch(() => {
+        /* ignore — login still usable with default */
+      });
+  }, [locale]);
+
+  useEffect(() => {
+    if (apiBaseUrl) setApiDraft(apiBaseUrl);
+  }, [apiBaseUrl]);
+
+  async function saveApiUrl() {
+    if (savingApi || !apiDraft.trim()) return;
+    setSavingApi(true);
+    setApiSavedMsg(null);
+    setError(null);
+    try {
+      const next = await window.teka.setConnectionSettings({ apiBaseUrl: apiDraft.trim() });
+      setConnection(next);
+      setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
+      setApiSavedMsg(t(locale, "connectionSaved"));
+      await onConnectionSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingApi(false);
+    }
+  }
 
   async function submit(event: FormEvent, userId?: string) {
     event.preventDefault();
@@ -54,6 +97,8 @@ export function LoginScreen({
       setBusy(false);
     }
   }
+
+  const envLocked = Boolean(connection?.fromEnv);
 
   return (
     <div
@@ -94,6 +139,58 @@ export function LoginScreen({
           <p style={{ margin: "10px 0 0", color: "var(--tek-ash)", fontSize: 14 }}>
             {t(locale, "loginSubtitle")}
           </p>
+        </div>
+
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 14,
+            borderRadius: 16,
+            border: "1px solid var(--tek-line)",
+            background: "var(--tek-card)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 650,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "var(--tek-ash)",
+            }}
+          >
+            {t(locale, "connectionSection")}
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--tek-ash)", lineHeight: 1.45 }}>
+            {t(locale, "connectionHint")}
+          </p>
+          {envLocked ? (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--tek-ash)" }}>
+              {t(locale, "connectionEnvOverride")}
+            </p>
+          ) : null}
+          <input
+            type="url"
+            value={apiDraft}
+            disabled={busy || savingApi || envLocked}
+            placeholder={t(locale, "connectionApiPlaceholder")}
+            onChange={(e) => setApiDraft(e.target.value)}
+            style={inputStyle}
+          />
+          <button
+            type="button"
+            disabled={busy || savingApi || envLocked || !apiDraft.trim()}
+            onClick={() => void saveApiUrl()}
+            style={ghostBtn}
+          >
+            {savingApi ? t(locale, "loading") : t(locale, "connectionSave")}
+          </button>
+          {apiSavedMsg ? (
+            <p style={{ margin: 0, fontSize: 12, color: "#15803d" }}>{apiSavedMsg}</p>
+          ) : null}
         </div>
 
         {!apiConfigured ? (
@@ -264,6 +361,18 @@ const inputStyle: CSSProperties = {
   background: "var(--tek-card)",
   color: "var(--tek-ink)",
   outline: "none",
+};
+
+const ghostBtn: CSSProperties = {
+  border: "1px solid var(--tek-line)",
+  background: "transparent",
+  color: "var(--tek-ink)",
+  padding: "8px 14px",
+  borderRadius: 999,
+  fontWeight: 650,
+  fontSize: 13,
+  cursor: "pointer",
+  alignSelf: "flex-start",
 };
 
 const primaryBtn: CSSProperties = {

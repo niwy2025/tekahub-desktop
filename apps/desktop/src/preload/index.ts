@@ -11,6 +11,8 @@ import {
   type Client,
   type CancelSalePayload,
   type CreateSalePayload,
+  type ConnectionSettings,
+  type ConnectionSettingsView,
   type PrinterInfo,
   type PrinterSettings,
   type Product,
@@ -78,6 +80,12 @@ const api = {
     ipcRenderer.invoke(IpcChannels.getPrinterSettings),
   setPrinterSettings: (patch: Partial<PrinterSettings>): Promise<PrinterSettings> =>
     ipcRenderer.invoke(IpcChannels.setPrinterSettings, patch),
+  getConnectionSettings: (): Promise<ConnectionSettingsView> =>
+    ipcRenderer.invoke(IpcChannels.getConnectionSettings),
+  setConnectionSettings: (
+    patch: Partial<ConnectionSettings>,
+  ): Promise<ConnectionSettingsView> =>
+    ipcRenderer.invoke(IpcChannels.setConnectionSettings, patch),
   listPrinters: (): Promise<PrinterInfo[]> => ipcRenderer.invoke(IpcChannels.listPrinters),
   printSaleReceipt: (
     payload: SaleReceiptPayload,

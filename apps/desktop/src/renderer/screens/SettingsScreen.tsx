@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type {
   AppLocale,
   AuthUser,
+  ConnectionSettingsView,
   PackUpdateState,
   PrinterInfo,
   PrinterSettings,
@@ -101,9 +102,121 @@ export function SettingsScreen({
           )}
         </Panel>
 
+        <ConnectionPanel locale={locale} />
         <PrinterPanel locale={locale} />
       </section>
     </div>
+  );
+}
+
+function ConnectionPanel({ locale }: { locale: AppLocale }) {
+  const [view, setView] = useState<ConnectionSettingsView | null>(null);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      if (typeof window.teka?.getConnectionSettings !== "function") {
+        setError(t(locale, "printerBridgeStale"));
+        setView(null);
+        return;
+      }
+      const next = await window.teka.getConnectionSettings();
+      setView(next);
+      setDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t(locale, "connectionLoadError"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, [locale]);
+
+  async function save(url: string | null) {
+    if (saving) return;
+    setSaving(true);
+    setSavedMsg(null);
+    setError(null);
+    try {
+      const next = await window.teka.setConnectionSettings({ apiBaseUrl: url });
+      setView(next);
+      setDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
+      setSavedMsg(t(locale, "connectionSaved"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Panel title={t(locale, "connectionSection")}>
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
+        {t(locale, "connectionHint")}
+      </p>
+
+      {loading || !view ? (
+        <p style={{ margin: 0, fontSize: 13, color: "var(--tek-ash)" }}>
+          {t(locale, "loading")}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {view.fromEnv ? (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--tek-ash)", lineHeight: 1.45 }}>
+              {t(locale, "connectionEnvOverride")}
+            </p>
+          ) : null}
+
+          <label style={selectLabel}>
+            {t(locale, "connectionApiUrl")}
+            <input
+              type="url"
+              value={draft}
+              disabled={saving || view.fromEnv}
+              placeholder={t(locale, "connectionApiPlaceholder")}
+              onChange={(e) => setDraft(e.target.value)}
+              style={selectInput}
+            />
+          </label>
+
+          <Row label={t(locale, "api")} value={view.effectiveApiBaseUrl} />
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={primaryBtn}
+              disabled={saving || view.fromEnv || !draft.trim()}
+              onClick={() => void save(draft.trim())}
+            >
+              {t(locale, "connectionSave")}
+            </button>
+            <button
+              type="button"
+              style={ghostBtn}
+              disabled={saving || view.fromEnv}
+              onClick={() => void save(view.defaultApiBaseUrl)}
+            >
+              {t(locale, "connectionResetDefault")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {savedMsg ? (
+        <p style={{ margin: "12px 0 0", fontSize: 13, color: "#15803d" }}>{savedMsg}</p>
+      ) : null}
+      {error ? (
+        <p style={{ margin: "12px 0 0", fontSize: 13, color: "var(--tek-danger)" }}>{error}</p>
+      ) : null}
+    </Panel>
   );
 }
 

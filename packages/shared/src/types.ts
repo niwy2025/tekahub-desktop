@@ -96,6 +96,8 @@ export const IpcChannels = {
   getSaleDetail: "teka:get-sale-detail",
   getPrinterSettings: "teka:get-printer-settings",
   setPrinterSettings: "teka:set-printer-settings",
+  getConnectionSettings: "teka:get-connection-settings",
+  setConnectionSettings: "teka:set-connection-settings",
   listPrinters: "teka:list-printers",
   printSaleReceipt: "teka:print-sale-receipt",
   onSessionExpired: "teka:on-session-expired",
@@ -331,6 +333,22 @@ export type PrinterSettings = {
   silentPrint: boolean;
   /** Nom imprimante système, ou null = imprimante par défaut. */
   printerName: string | null;
+};
+
+/** Connexion serveur — persisté dans userData/config/connection.json */
+export type ConnectionSettings = {
+  /** URL de base de l’API Laravel (sans slash final). null = utiliser le défaut app. */
+  apiBaseUrl: string | null;
+};
+
+/** Vue connexion pour l’UI (valeur effective + métadonnées). */
+export type ConnectionSettingsView = ConnectionSettings & {
+  /** URL réellement utilisée par le shell (env > fichier > défaut). */
+  effectiveApiBaseUrl: string;
+  /** URL proposée par défaut si rien n’est enregistré. */
+  defaultApiBaseUrl: string;
+  /** true si API_BASE_URL vient de l’environnement (.env) et prime sur le fichier. */
+  fromEnv: boolean;
 };
 
 export type SaleReceiptLine = {
