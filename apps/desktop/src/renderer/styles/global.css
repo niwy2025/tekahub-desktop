@@ -69,6 +69,18 @@ button {
   cursor: pointer;
 }
 
+/* Bouton réglages serveur (login) — cliquable sous titleBarOverlay Windows */
+.tek-login-settings-btn {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.tek-login-settings-btn:hover {
+  color: var(--tek-black);
+  border-color: var(--tek-ink);
+  background: #fff;
+}
+
 button:disabled,
 input:disabled {
   cursor: not-allowed;

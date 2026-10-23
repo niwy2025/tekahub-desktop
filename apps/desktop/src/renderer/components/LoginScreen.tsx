@@ -245,6 +245,7 @@ export function LoginScreen({
         aria-label={t(locale, "connectionOpenSettings")}
         title={t(locale, "connectionOpenSettings")}
         onClick={() => setSettingsOpen(true)}
+        className="tek-login-settings-btn"
         style={gearBtn}
       >
         <SettingsIcon />
@@ -510,7 +511,6 @@ const gearBtn: CSSProperties = {
   placeItems: "center",
   cursor: "pointer",
   boxShadow: "var(--tek-shadow)",
-  WebkitAppRegion: "no-drag",
   zIndex: 40,
 };
 
