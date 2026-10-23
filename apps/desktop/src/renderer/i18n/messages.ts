@@ -15,7 +15,7 @@ export const messages = {
     fillAllFields: "Veuillez remplir tous les champs",
     apiMissing: "L’URL du serveur API n’est pas configurée",
     apiMissingHint:
-      "Indique l’adresse du serveur ci-dessous (ex. https://api-tekahub.niwytech.cloud), puis connecte-toi.",
+      "Ouvre les réglages (icône en bas à gauche) pour indiquer l’adresse du serveur, puis connecte-toi.",
     connectionSection: "Connexion serveur",
     connectionHint:
       "Adresse de l’API TekaHub. Enregistrée sur cet ordinateur (pas besoin de fichier .env).",
@@ -27,6 +27,8 @@ export const messages = {
     connectionEnvOverride:
       "Cette URL est forcée par l’environnement (.env). Le fichier local ne s’applique pas tant que API_BASE_URL est défini.",
     connectionResetDefault: "Réinitialiser au défaut",
+    connectionOpenSettings: "Réglages serveur",
+    connectionClose: "Fermer",
     loginError: "Erreur de connexion",
     chooseProfile: "Choisir un profil",
     chooseProfileHint:
@@ -300,7 +302,7 @@ export const messages = {
     fillAllFields: "Please fill in all fields",
     apiMissing: "API server URL is not configured",
     apiMissingHint:
-      "Enter the server address below (e.g. https://api-tekahub.niwytech.cloud), then sign in.",
+      "Open settings (gear icon bottom-left) to set the server address, then sign in.",
     connectionSection: "Server connection",
     connectionHint:
       "TekaHub API address. Saved on this computer (no .env file needed).",
@@ -312,6 +314,8 @@ export const messages = {
     connectionEnvOverride:
       "This URL is forced by the environment (.env). The local file is ignored while API_BASE_URL is set.",
     connectionResetDefault: "Reset to default",
+    connectionOpenSettings: "Server settings",
+    connectionClose: "Close",
     loginError: "Sign-in failed",
     chooseProfile: "Choose a profile",
     chooseProfileHint:

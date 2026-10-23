@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { AppLocale, AuthSelectableProfile, ConnectionSettingsView } from "@teka/shared";
 import logo from "../assets/teka-hub-logo.svg";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
@@ -35,52 +43,15 @@ export function LoginScreen({
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiDraft, setApiDraft] = useState(apiBaseUrl ?? "");
-  const [connection, setConnection] = useState<ConnectionSettingsView | null>(null);
-  const [savingApi, setSavingApi] = useState(false);
-  const [apiSavedMsg, setApiSavedMsg] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const loginRef = useRef<HTMLInputElement>(null);
   useAutoFocus(loginRef);
-
-  useEffect(() => {
-    if (typeof window.teka?.getConnectionSettings !== "function") return;
-    void window.teka
-      .getConnectionSettings()
-      .then((next) => {
-        setConnection(next);
-        setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
-      })
-      .catch(() => {
-        /* ignore — login still usable with default */
-      });
-  }, [locale]);
-
-  useEffect(() => {
-    if (apiBaseUrl) setApiDraft(apiBaseUrl);
-  }, [apiBaseUrl]);
-
-  async function saveApiUrl() {
-    if (savingApi || !apiDraft.trim()) return;
-    setSavingApi(true);
-    setApiSavedMsg(null);
-    setError(null);
-    try {
-      const next = await window.teka.setConnectionSettings({ apiBaseUrl: apiDraft.trim() });
-      setConnection(next);
-      setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
-      setApiSavedMsg(t(locale, "connectionSaved"));
-      await onConnectionSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSavingApi(false);
-    }
-  }
 
   async function submit(event: FormEvent, userId?: string) {
     event.preventDefault();
     if (!apiConfigured) {
       setError(t(locale, "apiMissing"));
+      setSettingsOpen(true);
       return;
     }
     if (!loginId.trim() || !password) {
@@ -98,8 +69,6 @@ export function LoginScreen({
     }
   }
 
-  const envLocked = Boolean(connection?.fromEnv);
-
   return (
     <div
       style={{
@@ -107,6 +76,7 @@ export function LoginScreen({
         display: "grid",
         placeItems: "center",
         padding: 32,
+        position: "relative",
       }}
     >
       <div style={{ width: "100%", maxWidth: 440 }}>
@@ -139,58 +109,6 @@ export function LoginScreen({
           <p style={{ margin: "10px 0 0", color: "var(--tek-ash)", fontSize: 14 }}>
             {t(locale, "loginSubtitle")}
           </p>
-        </div>
-
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 14,
-            borderRadius: 16,
-            border: "1px solid var(--tek-line)",
-            background: "var(--tek-card)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 650,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: "var(--tek-ash)",
-            }}
-          >
-            {t(locale, "connectionSection")}
-          </div>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-            {t(locale, "connectionHint")}
-          </p>
-          {envLocked ? (
-            <p style={{ margin: 0, fontSize: 12, color: "var(--tek-ash)" }}>
-              {t(locale, "connectionEnvOverride")}
-            </p>
-          ) : null}
-          <input
-            type="url"
-            value={apiDraft}
-            disabled={busy || savingApi || envLocked}
-            placeholder={t(locale, "connectionApiPlaceholder")}
-            onChange={(e) => setApiDraft(e.target.value)}
-            style={inputStyle}
-          />
-          <button
-            type="button"
-            disabled={busy || savingApi || envLocked || !apiDraft.trim()}
-            onClick={() => void saveApiUrl()}
-            style={ghostBtn}
-          >
-            {savingApi ? t(locale, "loading") : t(locale, "connectionSave")}
-          </button>
-          {apiSavedMsg ? (
-            <p style={{ margin: 0, fontSize: 12, color: "#15803d" }}>{apiSavedMsg}</p>
-          ) : null}
         </div>
 
         {!apiConfigured ? (
@@ -321,7 +239,193 @@ export function LoginScreen({
           </div>
         ) : null}
       </div>
+
+      <button
+        type="button"
+        aria-label={t(locale, "connectionOpenSettings")}
+        title={t(locale, "connectionOpenSettings")}
+        onClick={() => setSettingsOpen(true)}
+        style={gearBtn}
+      >
+        <GearIcon />
+      </button>
+
+      {settingsOpen ? (
+        <ConnectionSettingsModal
+          locale={locale}
+          apiBaseUrl={apiBaseUrl}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={async () => {
+            await onConnectionSaved();
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function ConnectionSettingsModal({
+  locale,
+  apiBaseUrl,
+  onClose,
+  onSaved,
+}: {
+  locale: AppLocale;
+  apiBaseUrl: string | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const titleId = useId();
+  const [apiDraft, setApiDraft] = useState(apiBaseUrl ?? "");
+  const [connection, setConnection] = useState<ConnectionSettingsView | null>(null);
+  const [savingApi, setSavingApi] = useState(false);
+  const [apiSavedMsg, setApiSavedMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window.teka?.getConnectionSettings !== "function") return;
+    void window.teka
+      .getConnectionSettings()
+      .then((next) => {
+        setConnection(next);
+        setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }, [locale]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function saveApiUrl() {
+    if (savingApi || !apiDraft.trim()) return;
+    setSavingApi(true);
+    setApiSavedMsg(null);
+    setError(null);
+    try {
+      const next = await window.teka.setConnectionSettings({ apiBaseUrl: apiDraft.trim() });
+      setConnection(next);
+      setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
+      setApiSavedMsg(t(locale, "connectionSaved"));
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingApi(false);
+    }
+  }
+
+  const envLocked = Boolean(connection?.fromEnv);
+
+  return (
+    <div
+      role="presentation"
+      style={modalBackdrop}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={modalCard}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+          <div>
+            <h2 id={titleId} style={{ margin: 0, fontSize: 18, fontWeight: 650 }}>
+              {t(locale, "connectionSection")}
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
+              {t(locale, "connectionHint")}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} style={iconCloseBtn} aria-label={t(locale, "connectionClose")}>
+            ×
+          </button>
+        </div>
+
+        {envLocked ? (
+          <p style={{ margin: "14px 0 0", fontSize: 12, color: "var(--tek-ash)", lineHeight: 1.45 }}>
+            {t(locale, "connectionEnvOverride")}
+          </p>
+        ) : null}
+
+        <label style={{ display: "grid", gap: 6, marginTop: 16 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 650,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "var(--tek-ash)",
+            }}
+          >
+            {t(locale, "connectionApiUrl")}
+          </span>
+          <input
+            ref={inputRef}
+            type="url"
+            value={apiDraft}
+            disabled={savingApi || envLocked}
+            placeholder={t(locale, "connectionApiPlaceholder")}
+            onChange={(e) => setApiDraft(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            disabled={savingApi || envLocked || !apiDraft.trim()}
+            onClick={() => void saveApiUrl()}
+            style={{ ...primaryBtn, width: "auto", padding: "10px 18px", boxShadow: "none" }}
+          >
+            {savingApi ? t(locale, "loading") : t(locale, "connectionSave")}
+          </button>
+          <button type="button" onClick={onClose} style={ghostBtn}>
+            {t(locale, "connectionClose")}
+          </button>
+        </div>
+
+        {apiSavedMsg ? (
+          <p style={{ margin: "12px 0 0", fontSize: 13, color: "#15803d" }}>{apiSavedMsg}</p>
+        ) : null}
+        {error ? (
+          <p style={{ margin: "12px 0 0", fontSize: 13, color: "var(--tek-danger)" }}>{error}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M19.4 13.5a7.7 7.7 0 0 0 .05-1.5l2.05-1.6-1.9-3.3-2.45.55a7.8 7.8 0 0 0-1.3-.75L15.5 3.5h-3.8l-.35 2.4c-.46.2-.9.45-1.3.75l-2.45-.55-1.9 3.3 2.05 1.6c-.04.5-.04 1 .05 1.5l-2.05 1.6 1.9 3.3 2.45-.55c.4.3.84.55 1.3.75l.35 2.4h3.8l.35-2.4c.46-.2.9-.45 1.3-.75l2.45.55 1.9-3.3-2.05-1.6Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -385,4 +489,51 @@ const primaryBtn: CSSProperties = {
   fontWeight: 700,
   fontSize: 15,
   boxShadow: "0 14px 35px rgba(244, 198, 15, 0.28)",
+  cursor: "pointer",
+};
+
+const gearBtn: CSSProperties = {
+  position: "fixed",
+  left: 20,
+  bottom: 20,
+  width: 44,
+  height: 44,
+  borderRadius: 12,
+  border: "1px solid var(--tek-line)",
+  background: "var(--tek-card)",
+  color: "var(--tek-ash)",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  boxShadow: "var(--tek-shadow)",
+};
+
+const modalBackdrop: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.45)",
+  display: "grid",
+  placeItems: "center",
+  padding: 24,
+  zIndex: 50,
+};
+
+const modalCard: CSSProperties = {
+  width: "100%",
+  maxWidth: 420,
+  background: "var(--tek-card)",
+  border: "1px solid var(--tek-line)",
+  borderRadius: 18,
+  padding: 22,
+  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.22)",
+};
+
+const iconCloseBtn: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "var(--tek-ash)",
+  fontSize: 24,
+  lineHeight: 1,
+  cursor: "pointer",
+  padding: 4,
 };
