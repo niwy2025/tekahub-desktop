@@ -25,10 +25,10 @@ export const appConfig = {
     return (env("UPDATE_PROVIDER", "github") as "github" | "generic");
   },
   get ghOwner() {
-    return env("GH_OWNER", "your-org");
+    return env("GH_OWNER", "niwy2025");
   },
   get ghRepo() {
-    return env("GH_REPO", "teka-desktop");
+    return env("GH_REPO", "tekahub-desktop");
   },
   get updateUrl() {
     return env("UPDATE_URL");

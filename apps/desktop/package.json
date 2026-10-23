@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "TekaHub Electron shell",
+  "author": "Niwy",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
@@ -25,7 +26,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^35.0.1",
+    "electron": "35.7.5",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",
     "react": "^19.0.0",
@@ -36,6 +37,7 @@
   "build": {
     "appId": "com.tekahub.desktop",
     "productName": "TekaHub",
+    "electronVersion": "35.7.5",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -57,8 +59,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "your-org",
-        "repo": "teka-desktop"
+        "owner": "niwy2025",
+        "repo": "tekahub-desktop"
       }
     ],
     "linux": {
@@ -74,7 +76,8 @@
         "nsis"
       ],
       "icon": "build/icon.png",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "signAndEditExecutable": false
     },
     "mac": {
       "target": [
