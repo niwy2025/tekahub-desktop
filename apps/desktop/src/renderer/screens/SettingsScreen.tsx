@@ -52,7 +52,10 @@ export function SettingsScreen({
         </Panel>
 
         <Panel title={t(locale, "application")}>
-          <Row label={t(locale, "shellVersion")} value={shell.currentVersion} />
+          <Row label={t(locale, "updateCurrentVersion")} value={shell.currentVersion} />
+          {shell.availableVersion ? (
+            <Row label={t(locale, "available")} value={shell.availableVersion} />
+          ) : null}
           <div style={{ marginTop: 14 }}>
             <StatusBadge
               status={shell.status}
@@ -60,6 +63,18 @@ export function SettingsScreen({
               progress={shell.progress}
             />
           </div>
+          {shell.error ? (
+            <p
+              style={{
+                margin: "10px 0 0",
+                fontSize: 12,
+                color: "var(--tek-danger)",
+                wordBreak: "break-word",
+              }}
+            >
+              {shell.error}
+            </p>
+          ) : null}
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
             <button type="button" onClick={onCheckUpdates} disabled={busy} style={ghostBtn}>
               {t(locale, "checkUpdates")}

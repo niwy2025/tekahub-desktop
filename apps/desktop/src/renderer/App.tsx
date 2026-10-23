@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoginScreen } from "./components/LoginScreen";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { useAuth } from "./hooks/useAuth";
 import { useUpdates } from "./hooks/useUpdates";
 import { canCancelSales } from "@teka/shared";
@@ -37,7 +38,8 @@ export function App() {
     refreshSession,
     clearProfiles,
   } = useAuth();
-  const updates = useUpdates(Boolean(user));
+  // Toujours écouter l’updater (même avant login) pour afficher la bannière MAJ.
+  const updates = useUpdates(true);
   const [module, setModuleState] = useState<AppModule>(() => moduleFromHash());
   const [helpOpen, setHelpOpen] = useState(false);
   const posSearchRef = useRef<HTMLInputElement>(null);
@@ -119,16 +121,25 @@ export function App() {
 
   if (!user) {
     return (
-      <LoginScreen
-        locale={locale}
-        onLocaleChange={(next) => void setLocale(next)}
-        apiConfigured={session?.apiConfigured ?? false}
-        apiBaseUrl={session?.apiBaseUrl ?? null}
-        onConnectionSaved={refreshSession}
-        profiles={profiles}
-        onClearProfiles={clearProfiles}
-        onLogin={login}
-      />
+      <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+        <UpdateBanner
+          locale={locale}
+          shell={updates.shell}
+          onInstall={() => void updates.installShell()}
+        />
+        <div style={{ flex: 1 }}>
+          <LoginScreen
+            locale={locale}
+            onLocaleChange={(next) => void setLocale(next)}
+            apiConfigured={session?.apiConfigured ?? false}
+            apiBaseUrl={session?.apiBaseUrl ?? null}
+            onConnectionSaved={refreshSession}
+            profiles={profiles}
+            onClearProfiles={clearProfiles}
+            onLogin={login}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -184,23 +195,36 @@ export function App() {
   }
 
   return (
-    <AppShell
-      locale={locale}
-      onLocaleChange={(next) => void setLocale(next)}
-      user={user}
-      module={module}
-      onNavigate={(next) => {
-        setHelpOpen(false);
-        onNavigate(next);
-      }}
-      onLogout={() => void logout()}
-      onOpenHelp={() => setHelpOpen(true)}
-    >
-      {helpOpen ? (
-        <ShortcutsDocsScreen locale={locale} onClose={() => setHelpOpen(false)} />
-      ) : (
-        content
-      )}
-    </AppShell>
+    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <UpdateBanner
+        locale={locale}
+        shell={updates.shell}
+        onInstall={() => void updates.installShell()}
+        onOpenSettings={() => {
+          setHelpOpen(false);
+          setModule("settings");
+        }}
+      />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <AppShell
+          locale={locale}
+          onLocaleChange={(next) => void setLocale(next)}
+          user={user}
+          module={module}
+          onNavigate={(next) => {
+            setHelpOpen(false);
+            onNavigate(next);
+          }}
+          onLogout={() => void logout()}
+          onOpenHelp={() => setHelpOpen(true)}
+        >
+          {helpOpen ? (
+            <ShortcutsDocsScreen locale={locale} onClose={() => setHelpOpen(false)} />
+          ) : (
+            content
+          )}
+        </AppShell>
+      </div>
+    </div>
   );
 }

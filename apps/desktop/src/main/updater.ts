@@ -27,6 +27,8 @@ export function getShellUpdateState(): ShellUpdateState {
 export function configureAutoUpdater(getWindow: () => BrowserWindow | null): void {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Important pour GitHub : lire la dernière release non-draft.
+  autoUpdater.allowPrerelease = false;
 
   if (appConfig.updateProvider === "generic" && appConfig.updateUrl) {
     autoUpdater.setFeedURL({
