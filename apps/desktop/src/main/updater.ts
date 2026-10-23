@@ -24,10 +24,14 @@ export function getShellUpdateState(): ShellUpdateState {
   return state;
 }
 
+/** Feed public stable — évite l’API GitHub (rate-limit / dépôt privé). */
+function defaultGenericFeedUrl(): string {
+  return `https://github.com/${appConfig.ghOwner}/${appConfig.ghRepo}/releases/latest/download/`;
+}
+
 export function configureAutoUpdater(getWindow: () => BrowserWindow | null): void {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  // Important pour GitHub : lire la dernière release non-draft.
   autoUpdater.allowPrerelease = false;
 
   if (appConfig.updateProvider === "generic" && appConfig.updateUrl) {
@@ -35,12 +39,17 @@ export function configureAutoUpdater(getWindow: () => BrowserWindow | null): voi
       provider: "generic",
       url: appConfig.updateUrl,
     });
-  } else {
-    // github provider uses publish config from package.json / electron-builder
+  } else if (appConfig.updateProvider === "github") {
+    // API GitHub (historique). Préférer le feed generic ci-dessous pour les builds publiques.
     autoUpdater.setFeedURL({
       provider: "github",
       owner: appConfig.ghOwner,
       repo: appConfig.ghRepo,
+    });
+  } else {
+    autoUpdater.setFeedURL({
+      provider: "generic",
+      url: defaultGenericFeedUrl(),
     });
   }
 
@@ -115,10 +124,23 @@ export async function checkShellUpdates(): Promise<ShellUpdateState> {
     };
     return state;
   }
-  try {
-    await autoUpdater.checkForUpdates();
-  } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
+
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await autoUpdater.checkForUpdates();
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+  }
+
+  if (lastError) {
+    const raw = lastError instanceof Error ? lastError.message : String(lastError);
     state = {
       ...state,
       status: "error",

@@ -125,9 +125,12 @@ app.whenReady().then(async () => {
   registerIpc(getWindow);
   createWindow();
 
-  void checkShellUpdates().then(() => {
-    void checkAndUpdatePack(appConfig.corePackId, getWindow);
-  });
+  // Laisser la fenêtre / le réseau Windows démarrer avant le check MAJ.
+  setTimeout(() => {
+    void checkShellUpdates().then(() => {
+      void checkAndUpdatePack(appConfig.corePackId, getWindow);
+    });
+  }, 2500);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

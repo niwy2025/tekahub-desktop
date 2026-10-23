@@ -20,7 +20,8 @@ export const appConfig = {
     return env("PACKS_PUBLIC_KEY");
   },
   get updateProvider() {
-    return env("UPDATE_PROVIDER", "github") as "github" | "generic";
+    // generic = latest.yml via releases/latest/download (fiable si le dépôt est public)
+    return env("UPDATE_PROVIDER", "generic") as "github" | "generic";
   },
   get ghOwner() {
     return env("GH_OWNER", "niwy2025");
