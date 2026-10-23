@@ -75,9 +75,8 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.png",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
       "target": [
@@ -90,7 +89,10 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     }
   }
 }
