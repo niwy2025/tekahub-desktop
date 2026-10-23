@@ -34,10 +34,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Windows titleBarOverlay : zone de drag en haut (36px) pour déplacer la fenêtre. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  z-index: 1000;
+  -webkit-app-region: drag;
+  app-region: drag;
+  pointer-events: none;
+}
+
+@media (pointer: fine) {
+  body::before {
+    pointer-events: auto;
+  }
+}
+
 button,
 input,
-a {
+a,
+select,
+textarea,
+label {
   font: inherit;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 button {

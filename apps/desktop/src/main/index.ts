@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeImage, shell } from "electron";
+import { app, BrowserWindow, Menu, nativeImage, nativeTheme, shell } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnvFiles } from "./load-env";
@@ -11,6 +11,13 @@ import { configureAutoUpdater, checkShellUpdates } from "./updater";
 import { checkAndUpdatePack } from "./pack-manager";
 import { getAppPaths } from "./paths";
 import { appConfig } from "./config";
+
+/** Fond clair de l’UI — la barre de titre Windows suit le thème système sinon. */
+const APP_BG = "#fbfbf8";
+const APP_INK = "#1a1a1a";
+
+// Aligner chrome natif (title bar) sur le thème clair TekaHub, même si Windows est en dark mode.
+nativeTheme.themeSource = "light";
 
 /** Icône fenêtre / dock — build/resources selon packagé ou dev. */
 function resolveAppIconPath(): string | null {
@@ -59,9 +66,21 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 560,
     title: "TekaHub",
-    backgroundColor: "#fbfbf8",
+    backgroundColor: APP_BG,
     show: false,
+    autoHideMenuBar: true,
     ...(icon && !icon.isEmpty() ? { icon } : {}),
+    // Windows : barre de titre claire intégrée (couleurs app), boutons min/max/close natifs.
+    ...(process.platform === "win32"
+      ? {
+          titleBarStyle: "hidden",
+          titleBarOverlay: {
+            color: APP_BG,
+            symbolColor: APP_INK,
+            height: 36,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
