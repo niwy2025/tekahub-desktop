@@ -27,6 +27,7 @@ export function UpdateBanner({ locale, shell, onInstall, onOpenSettings }: Props
   return (
     <div
       role="status"
+      className="tek-caption-safe"
       style={{
         ...banner,
         background: isErr
@@ -75,7 +76,9 @@ const banner: CSSProperties = {
   alignItems: "center",
   gap: 14,
   padding: "10px 16px",
+  paddingRight: "var(--tek-caption-right)",
   width: "100%",
+  boxSizing: "border-box",
 };
 
 const primaryBtn: CSSProperties = {

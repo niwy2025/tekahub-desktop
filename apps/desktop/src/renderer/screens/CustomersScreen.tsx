@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type FormEvent,
   type KeyboardEvent,
 } from "react";
 import type { AppLocale, Client } from "@teka/shared";
@@ -12,17 +13,25 @@ import {
   getClientsSnapshot,
   refreshClients,
   subscribeClients,
+  upsertLocalClient,
 } from "../catalog/clientCatalogStore";
 import { ClientListSkeleton } from "../components/Skeleton";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
-import { t } from "../i18n/messages";
+import { friendlyNetworkError, t } from "../i18n/messages";
 
 type Props = {
   locale: AppLocale;
 };
 
+type EditorMode = "create" | "edit";
+
 function normalizeText(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function loyaltyPoints(client: Client): number {
+  const n = Number(client.solde_points_fidelite ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function filterClients(clients: Client[], search: string): Client[] {
@@ -40,6 +49,7 @@ export function CustomersScreen({ locale }: Props) {
   const [query, setQuery] = useState("");
   const catalog = useSyncExternalStore(subscribeClients, getClientsSnapshot, getClientsSnapshot);
   const [selected, setSelected] = useState<Client | null>(null);
+  const [editor, setEditor] = useState<{ mode: EditorMode; client?: Client } | null>(null);
 
   const clients = useMemo(
     () => filterClients(catalog.clients, query),
@@ -100,6 +110,13 @@ export function CustomersScreen({ locale }: Props) {
           placeholder={t(locale, "customersSearchPlaceholder")}
           style={searchInput}
         />
+        <button
+          type="button"
+          onClick={() => setEditor({ mode: "create" })}
+          style={primaryBtn}
+        >
+          {t(locale, "customersCreate")}
+        </button>
         <button
           type="button"
           disabled={catalog.loading || catalog.refreshing}
@@ -165,6 +182,7 @@ export function CustomersScreen({ locale }: Props) {
                   <th style={{ ...th, textAlign: "left" }}>{t(locale, "customersColName")}</th>
                   <th style={{ ...th, textAlign: "left" }}>{t(locale, "customersColPhone")}</th>
                   <th style={{ ...th, textAlign: "left" }}>{t(locale, "customersColEmail")}</th>
+                  <th style={{ ...th, textAlign: "right" }}>{t(locale, "customersColPoints")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,6 +206,16 @@ export function CustomersScreen({ locale }: Props) {
                         {client.telephone?.trim() || "—"}
                       </td>
                       <td style={td}>{client.email?.trim() || "—"}</td>
+                      <td
+                        style={{
+                          ...td,
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {loyaltyPoints(client)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -197,8 +225,29 @@ export function CustomersScreen({ locale }: Props) {
         </div>
       )}
 
-      {selected ? (
-        <ClientDetailModal locale={locale} client={selected} onClose={closeDetail} />
+      {selected && !editor ? (
+        <ClientDetailModal
+          locale={locale}
+          client={selected}
+          onClose={closeDetail}
+          onEdit={() => {
+            setEditor({ mode: "edit", client: selected });
+          }}
+        />
+      ) : null}
+
+      {editor ? (
+        <ClientEditorModal
+          locale={locale}
+          mode={editor.mode}
+          client={editor.client}
+          onClose={() => setEditor(null)}
+          onSaved={(client) => {
+            upsertLocalClient(client);
+            setSelected(client);
+            setEditor(null);
+          }}
+        />
       ) : null}
     </div>
   );
@@ -208,10 +257,12 @@ function ClientDetailModal({
   locale,
   client,
   onClose,
+  onEdit,
 }: {
   locale: AppLocale;
   client: Client;
   onClose: () => void;
+  onEdit: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, true);
@@ -261,13 +312,194 @@ function ClientDetailModal({
             label={t(locale, "customersColAddress")}
             value={client.adresse?.trim() || "—"}
           />
+          <Meta
+            label={t(locale, "customersColPoints")}
+            value={String(loyaltyPoints(client))}
+          />
+          <Meta
+            label={t(locale, "customersColNotes")}
+            value={client.notes?.trim() || "—"}
+          />
         </div>
 
-        <div style={{ marginTop: 18 }}>
+        <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" onClick={onEdit} style={primaryBtn}>
+            {t(locale, "customersEdit")}
+          </button>
           <button type="button" onClick={onClose} style={cancelBtn}>
             {t(locale, "customersDetailClose")}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ClientEditorModal({
+  locale,
+  mode,
+  client,
+  onClose,
+  onSaved,
+}: {
+  locale: AppLocale;
+  mode: EditorMode;
+  client?: Client;
+  onClose: () => void;
+  onSaved: (client: Client) => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const [nom, setNom] = useState(client?.nom ?? "");
+  const [telephone, setTelephone] = useState(client?.telephone ?? "");
+  const [email, setEmail] = useState(client?.email ?? "");
+  const [adresse, setAdresse] = useState(client?.adresse ?? "");
+  const [notes, setNotes] = useState(client?.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusTrap(dialogRef, true);
+
+  useEffect(() => {
+    phoneRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [busy, onClose]);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const phone = telephone.trim();
+    if (!phone) {
+      setError(t(locale, "customersPhoneRequired"));
+      phoneRef.current?.focus();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = {
+        nom: nom.trim() || null,
+        telephone: phone,
+        email: email.trim() || null,
+        adresse: adresse.trim() || null,
+        notes: notes.trim() || null,
+      };
+      const saved =
+        mode === "create"
+          ? await window.teka.createClient(payload)
+          : await window.teka.updateClient(client!.id, payload);
+      onSaved(saved);
+    } catch (err) {
+      setError(friendlyNetworkError(locale, err, "customersSaveError"));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div role="presentation" style={backdrop} onClick={() => !busy && onClose()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-editor-title"
+        tabIndex={-1}
+        style={dialog}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header style={dialogHeader}>
+          <div>
+            <p style={eyebrow}>{t(locale, "customersTitle")}</p>
+            <h2 id="customer-editor-title" style={{ margin: "4px 0 0", fontSize: 22 }}>
+              {mode === "create" ? t(locale, "customersCreate") : t(locale, "customersEdit")}
+            </h2>
+          </div>
+          <button type="button" onClick={onClose} style={ghostBtn} disabled={busy}>
+            Esc
+          </button>
+        </header>
+
+        <form onSubmit={(e) => void submit(e)} style={{ display: "grid", gap: 12 }}>
+          <label style={fieldLabel}>
+            {t(locale, "customersColPhone")} *
+            <input
+              ref={phoneRef}
+              value={telephone}
+              onChange={(e) => setTelephone(e.target.value)}
+              disabled={busy}
+              style={fieldInput}
+              autoComplete="tel"
+            />
+          </label>
+          <label style={fieldLabel}>
+            {t(locale, "customersColName")}
+            <input
+              value={nom}
+              onChange={(e) => setNom(e.target.value)}
+              disabled={busy}
+              style={fieldInput}
+              autoComplete="name"
+            />
+          </label>
+          <label style={fieldLabel}>
+            {t(locale, "customersColEmail")}
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={busy}
+              style={fieldInput}
+              autoComplete="email"
+            />
+          </label>
+          <label style={fieldLabel}>
+            {t(locale, "customersColAddress")}
+            <input
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+              disabled={busy}
+              style={fieldInput}
+            />
+          </label>
+          <label style={fieldLabel}>
+            {t(locale, "customersColNotes")}
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              disabled={busy}
+              rows={3}
+              style={{ ...fieldInput, resize: "vertical" }}
+            />
+          </label>
+
+          {mode === "edit" && client ? (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--tek-ash)" }}>
+              {t(locale, "customersColPoints")}: <strong>{loyaltyPoints(client)}</strong>
+            </p>
+          ) : null}
+
+          {error ? (
+            <p style={{ margin: 0, color: "var(--tek-danger)", fontSize: 13 }}>{error}</p>
+          ) : null}
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+            <button type="submit" disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.7 : 1 }}>
+              {busy ? t(locale, "customersSaving") : t(locale, "customersSave")}
+            </button>
+            <button type="button" disabled={busy} onClick={onClose} style={cancelBtn}>
+              {t(locale, "posQtyCancel")}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -328,9 +560,20 @@ const retryBtn: CSSProperties = {
   border: "1px solid var(--tek-line)",
   borderRadius: 10,
   padding: "8px 14px",
+  background: "var(--tek-card)",
+  color: "var(--tek-ink)",
+  fontWeight: 650,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const primaryBtn: CSSProperties = {
+  border: "none",
+  borderRadius: 10,
+  padding: "8px 14px",
   background: "var(--tek-yellow)",
   color: "var(--tek-black)",
-  fontWeight: 650,
+  fontWeight: 750,
   fontSize: 13,
   cursor: "pointer",
 };
@@ -410,7 +653,7 @@ const backdrop: CSSProperties = {
 
 const dialog: CSSProperties = {
   width: "min(480px, 100%)",
-  maxHeight: "min(90vh, 560px)",
+  maxHeight: "min(90vh, 640px)",
   overflow: "auto",
   background: "var(--tek-card)",
   borderRadius: 20,
@@ -470,4 +713,23 @@ const cancelBtn: CSSProperties = {
   fontWeight: 650,
   fontSize: 14,
   cursor: "pointer",
+};
+
+const fieldLabel: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  fontSize: 12,
+  fontWeight: 650,
+  color: "var(--tek-ash)",
+};
+
+const fieldInput: CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--tek-line)",
+  borderRadius: 10,
+  padding: "11px 12px",
+  fontSize: 14,
+  background: "var(--tek-bg)",
+  color: "var(--tek-ink)",
+  fontFamily: "inherit",
 };

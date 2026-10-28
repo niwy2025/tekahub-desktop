@@ -1,7 +1,7 @@
 import type { AppLocale, Product } from "@teka/shared";
 import { friendlyProductsError } from "../i18n/messages";
 
-const CACHE_KEY = "teka.product-catalog.v1";
+const CACHE_KEY = "teka.product-catalog.v2";
 
 /** Intervalle de refresh arrière-plan : ~8–12 min (aléatoire autour de 10 min). */
 const REFRESH_MIN_MS = 8 * 60 * 1000;
@@ -78,14 +78,8 @@ function isTransientNetworkError(err: unknown): boolean {
 }
 
 async function fetchFromApi(): Promise<Product[]> {
-  if (!window.teka) return [];
-  const load = () =>
-    window.teka!.listProducts({
-      type: "produit",
-      per_page: 200,
-      page: 1,
-      actif: true,
-    });
+  if (!window.teka?.listSellableProducts) return [];
+  const load = () => window.teka!.listSellableProducts();
 
   try {
     return await load();
@@ -219,6 +213,38 @@ export async function refreshCatalog(options?: {
       error: friendlyProductsError(locale, err),
     });
   }
+}
+
+/**
+ * Décrémente le stock local après une vente hors-ligne
+ * (le refresh réseau peut échouer).
+ */
+export function applyLocalStockSale(
+  lines: Array<{ produit_id: string; quantite: number }>,
+): void {
+  if (lines.length === 0 || state.products.length === 0) return;
+  const deltas = new Map<string, number>();
+  for (const line of lines) {
+    deltas.set(line.produit_id, (deltas.get(line.produit_id) ?? 0) + (Number(line.quantite) || 0));
+  }
+  const products = state.products.map((product) => {
+    const used = deltas.get(product.id);
+    if (!used) return product;
+    if (
+      product.stock_illimite ||
+      product.stock_source === "illimite" ||
+      product.stock_source === "service" ||
+      product.type === "service"
+    ) {
+      return product;
+    }
+    const current = Number(product.stock_disponible ?? product.stock ?? 0) || 0;
+    const next = Math.max(0, current - used);
+    return { ...product, stock_disponible: next, stock: next };
+  });
+  const fetchedAt = state.lastFetchedAt ?? Date.now();
+  writeDiskCache(products, fetchedAt);
+  setState({ products });
 }
 
 export function clearCatalog(): void {

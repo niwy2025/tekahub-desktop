@@ -29,7 +29,10 @@ export const messages = {
     connectionResetDefault: "Réinitialiser au défaut",
     connectionOpenSettings: "Réglages serveur",
     connectionClose: "Fermer",
-    loginError: "Erreur de connexion",
+    loginError: "Impossible de se connecter. Réessayez.",
+    loginInvalidCredentials: "Identifiants incorrects.",
+    loginAccountDisabled: "Ce compte est désactivé.",
+    loginNoToken: "Connexion refusée par le serveur.",
     chooseProfile: "Choisir un profil",
     chooseProfileHint:
       "Cet identifiant existe dans plusieurs organisations. Sélectionnez le profil à utiliser.",
@@ -61,6 +64,7 @@ export const messages = {
     navProducts: "Produits",
     navCustomers: "Clients",
     navHistory: "Historique",
+    navReport: "Clôture",
     navSettings: "Paramètres",
     posTitle: "Caisse",
     posSearch: "Rechercher un produit",
@@ -79,6 +83,9 @@ export const messages = {
     posQtyHint: "↑↓ ou +/− : quantité · Entrée : valider · Esc : annuler · Suppr : retirer",
     posQtyConfirm: "Valider la quantité",
     posQtyCancel: "Annuler",
+    posStockLimit: "Stock insuffisant (max. {max}).",
+    posStockEmpty: "Plus de stock pour cet article.",
+    posStockUnlimited: "Stock illimité",
     saleValidateEyebrow: "Caisse",
     saleValidateTitle: "Valider la vente",
     saleValidateLines: "Détail de la vente",
@@ -134,12 +141,18 @@ export const messages = {
     productsErrorGeneric: "Impossible de charger les produits. Réessayez.",
     stock: "Stock",
     customersTitle: "Clients",
-    customersHint: "Clients préchargés pour la caisse — recherche locale.",
+    customersHint: "Créer, modifier et consulter les clients — points fidélité inclus.",
     customersSearchPlaceholder: "Nom, téléphone, email…",
     customersEmpty: "Aucun client chargé",
     customersEmptyFilter: "Aucun client ne correspond à la recherche",
     customersRetry: "Réessayer",
     customersRefresh: "Actualiser",
+    customersCreate: "Nouveau client",
+    customersEdit: "Modifier",
+    customersSave: "Enregistrer",
+    customersSaving: "Enregistrement…",
+    customersSaveError: "Impossible d’enregistrer le client.",
+    customersPhoneRequired: "Le téléphone est obligatoire.",
     customersSummaryTotal: "Total",
     customersSummaryShown: "Affichés",
     customersSummaryWithPhone: "Avec téléphone",
@@ -147,6 +160,8 @@ export const messages = {
     customersColPhone: "Téléphone",
     customersColEmail: "Email",
     customersColAddress: "Adresse",
+    customersColPoints: "Points",
+    customersColNotes: "Notes",
     customersNoName: "Sans nom",
     customersDetailClose: "Fermer",
     historyTitle: "Historique",
@@ -200,6 +215,18 @@ export const messages = {
     historyStatusAnnulee: "Annulée",
     historyStatusBrouillon: "Brouillon",
     historyStatusPartial: "Partiel",
+    historyPaid: "Déjà payé",
+    historyRemaining: "Reste à encaisser",
+    historyPay: "Encaisser le reste",
+    historyPayTitle: "Complément de paiement",
+    historyPayHint: "Reste dû : {amount}",
+    historyPayAmount: "Montant reçu",
+    historyPayConfirm: "Enregistrer le paiement",
+    historyPaying: "Enregistrement…",
+    historyPayOk: "Paiement enregistré",
+    historyPayError: "Impossible d’enregistrer le paiement",
+    historyPayInvalid: "Indiquez un montant valide.",
+    historyPayTooHigh: "Le montant dépasse le reste dû ({max}).",
     settingsTitle: "Paramètres",
     printerSection: "Impression",
     printerHint:
@@ -228,6 +255,8 @@ export const messages = {
     shortcutNavCustomersDetail: "Ouvre le module clients.",
     shortcutNavHistory: "Aller à l’historique",
     shortcutNavHistoryDetail: "Ouvre l’historique des ventes.",
+    shortcutNavReport: "Aller à la clôture",
+    shortcutNavReportDetail: "Ouvre le rapport journalier de caisse.",
     shortcutNavSettings: "Aller aux paramètres",
     shortcutNavSettingsDetail: "Ouvre les paramètres, la session et les mises à jour.",
     shortcutFocusSearch: "Focus recherche produit",
@@ -290,8 +319,33 @@ export const messages = {
     docsPosQtyDeleteDetail: "Supprime la ligne et ferme le modal.",
     docsPosQtyEsc: "Annuler",
     docsPosQtyEscDetail: "Ferme le modal sans appliquer les changements de quantité.",
-    statusShortcuts: "F2 aide · F4 panier · Ctrl+1–5 · / recherche",
+    statusShortcuts: "F2 aide · F4 panier · Ctrl+1–6 · / recherche",
     statusReady: "Prêt",
+    statusOnline: "En ligne",
+    statusOffline: "Hors ligne",
+    statusQueuePending: "{n} vente(s) en attente",
+    statusQueueSyncing: "Synchronisation…",
+    statusQueueHint: "Cliquer pour synchroniser la file hors-ligne",
+    reportTitle: "Clôture de caisse",
+    reportHint: "Totaux du jour : ventes, espèces, dépenses et net.",
+    reportDate: "Date",
+    reportRefresh: "Actualiser",
+    reportLoadError: "Impossible de charger le rapport journalier.",
+    reportSalesCount: "Nb ventes",
+    reportCashTotal: "Espèces",
+    reportSalesTotal: "Total ventes",
+    reportNetTotal: "Net",
+    reportBreakdown: "Détail",
+    reportProducts: "Produits",
+    reportServices: "Services",
+    reportItemsQty: "Articles vendus",
+    reportExpenses: "Dépenses",
+    reportSalesList: "Ventes du jour",
+    reportNoSales: "Aucune vente sur cette journée",
+    reportColRef: "Réf",
+    reportColClient: "Client",
+    reportColPay: "Paiement",
+    reportColAmount: "Montant",
   },
   en: {
     loading: "Loading…",
@@ -321,7 +375,10 @@ export const messages = {
     connectionResetDefault: "Reset to default",
     connectionOpenSettings: "Server settings",
     connectionClose: "Close",
-    loginError: "Sign-in failed",
+    loginError: "Unable to sign in. Please try again.",
+    loginInvalidCredentials: "Incorrect credentials.",
+    loginAccountDisabled: "This account is disabled.",
+    loginNoToken: "Sign-in was refused by the server.",
     chooseProfile: "Choose a profile",
     chooseProfileHint:
       "This identifier belongs to multiple organizations. Select the profile to use.",
@@ -352,6 +409,7 @@ export const messages = {
     navProducts: "Products",
     navCustomers: "Customers",
     navHistory: "History",
+    navReport: "Close day",
     navSettings: "Settings",
     posTitle: "POS",
     posSearch: "Search product",
@@ -370,6 +428,9 @@ export const messages = {
     posQtyHint: "↑↓ or +/− : quantity · Enter : confirm · Esc : cancel · Del : remove",
     posQtyConfirm: "Confirm quantity",
     posQtyCancel: "Cancel",
+    posStockLimit: "Not enough stock (max. {max}).",
+    posStockEmpty: "Out of stock for this item.",
+    posStockUnlimited: "Unlimited stock",
     saleValidateEyebrow: "POS",
     saleValidateTitle: "Validate sale",
     saleValidateLines: "Sale details",
@@ -426,12 +487,18 @@ export const messages = {
     productsErrorGeneric: "Could not load products. Please try again.",
     stock: "Stock",
     customersTitle: "Customers",
-    customersHint: "Customers preloaded for the register — local search.",
+    customersHint: "Create, edit and browse customers — loyalty points included.",
     customersSearchPlaceholder: "Name, phone, email…",
     customersEmpty: "No customers loaded",
     customersEmptyFilter: "No customers match your search",
     customersRetry: "Retry",
     customersRefresh: "Refresh",
+    customersCreate: "New customer",
+    customersEdit: "Edit",
+    customersSave: "Save",
+    customersSaving: "Saving…",
+    customersSaveError: "Unable to save the customer.",
+    customersPhoneRequired: "Phone number is required.",
     customersSummaryTotal: "Total",
     customersSummaryShown: "Shown",
     customersSummaryWithPhone: "With phone",
@@ -439,6 +506,8 @@ export const messages = {
     customersColPhone: "Phone",
     customersColEmail: "Email",
     customersColAddress: "Address",
+    customersColPoints: "Points",
+    customersColNotes: "Notes",
     customersNoName: "No name",
     customersDetailClose: "Close",
     historyTitle: "History",
@@ -492,6 +561,18 @@ export const messages = {
     historyStatusAnnulee: "Cancelled",
     historyStatusBrouillon: "Draft",
     historyStatusPartial: "Partial",
+    historyPaid: "Already paid",
+    historyRemaining: "Remaining",
+    historyPay: "Collect remaining",
+    historyPayTitle: "Additional payment",
+    historyPayHint: "Amount due: {amount}",
+    historyPayAmount: "Amount received",
+    historyPayConfirm: "Record payment",
+    historyPaying: "Saving…",
+    historyPayOk: "Payment recorded",
+    historyPayError: "Unable to record payment",
+    historyPayInvalid: "Enter a valid amount.",
+    historyPayTooHigh: "Amount exceeds the remaining balance ({max}).",
     settingsTitle: "Settings",
     printerSection: "Printing",
     printerHint: "After a successful sale, the 80 mm receipt can print automatically.",
@@ -519,6 +600,8 @@ export const messages = {
     shortcutNavCustomersDetail: "Opens the customers module.",
     shortcutNavHistory: "Go to history",
     shortcutNavHistoryDetail: "Opens the sales history.",
+    shortcutNavReport: "Go to daily close",
+    shortcutNavReportDetail: "Opens the daily cash report.",
     shortcutNavSettings: "Go to settings",
     shortcutNavSettingsDetail: "Opens settings, session, and updates.",
     shortcutFocusSearch: "Focus product search",
@@ -578,8 +661,33 @@ export const messages = {
     docsPosQtyDeleteDetail: "Deletes the line and closes the modal.",
     docsPosQtyEsc: "Cancel",
     docsPosQtyEscDetail: "Closes the modal without applying quantity changes.",
-    statusShortcuts: "F2 help · F4 cart · Ctrl+1–5 · / search",
+    statusShortcuts: "F2 help · F4 cart · Ctrl+1–6 · / search",
     statusReady: "Ready",
+    statusOnline: "Online",
+    statusOffline: "Offline",
+    statusQueuePending: "{n} sale(s) pending",
+    statusQueueSyncing: "Syncing…",
+    statusQueueHint: "Click to sync the offline queue",
+    reportTitle: "Cash close",
+    reportHint: "Day totals: sales, cash, expenses and net.",
+    reportDate: "Date",
+    reportRefresh: "Refresh",
+    reportLoadError: "Unable to load the daily report.",
+    reportSalesCount: "Sales count",
+    reportCashTotal: "Cash",
+    reportSalesTotal: "Sales total",
+    reportNetTotal: "Net",
+    reportBreakdown: "Breakdown",
+    reportProducts: "Products",
+    reportServices: "Services",
+    reportItemsQty: "Items sold",
+    reportExpenses: "Expenses",
+    reportSalesList: "Sales today",
+    reportNoSales: "No sales for this day",
+    reportColRef: "Ref",
+    reportColClient: "Customer",
+    reportColPay: "Payment",
+    reportColAmount: "Amount",
   },
 } as const;
 
@@ -595,6 +703,13 @@ export function normalizeLocale(value?: string | null): AppLocale {
   return "fr";
 }
 
+function stripIpcErrorMessage(raw: string): string {
+  return raw
+    .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*(?:Error:\s*)?/i, "")
+    .replace(/^Error:\s*/i, "")
+    .trim();
+}
+
 /** Transforme erreurs IPC / net::ERR_* en message utilisateur. */
 export function friendlyNetworkError(
   locale: AppLocale,
@@ -602,7 +717,7 @@ export function friendlyNetworkError(
   fallbackKey: MessageKey = "productsErrorGeneric",
 ): string {
   const raw = err instanceof Error ? err.message : String(err ?? "");
-  const text = raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, "");
+  const text = stripIpcErrorMessage(raw);
 
   const codeMatch = text.match(/TEKA_NET:([A-Z_]+)/i);
   const code = (codeMatch?.[1] ?? "").toUpperCase();
@@ -640,6 +755,28 @@ export function friendlyNetworkError(
     return text;
   }
   return t(locale, fallbackKey);
+}
+
+/** Messages courts pour l’écran de connexion (jamais le wrap IPC Electron). */
+export function friendlyLoginError(locale: AppLocale, err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const text = stripIpcErrorMessage(raw);
+
+  if (
+    /TEKA_AUTH:INVALID_CREDENTIALS|Identifiants invalides|invalid credentials|incorrect credentials/i.test(
+      text,
+    )
+  ) {
+    return t(locale, "loginInvalidCredentials");
+  }
+  if (/TEKA_AUTH:ACCOUNT_DISABLED|compte est désactivé|account is disabled/i.test(text)) {
+    return t(locale, "loginAccountDisabled");
+  }
+  if (/TEKA_AUTH:NO_TOKEN/i.test(text)) {
+    return t(locale, "loginNoToken");
+  }
+
+  return friendlyNetworkError(locale, err, "loginError");
 }
 
 export function friendlyProductsError(locale: AppLocale, err: unknown): string {

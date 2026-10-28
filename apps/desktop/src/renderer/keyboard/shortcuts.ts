@@ -9,6 +9,7 @@ export type ShortcutAction =
   | "nav.products"
   | "nav.customers"
   | "nav.history"
+  | "nav.report"
   | "nav.settings"
   | "focus.search"
   | "focus.cart"
@@ -24,6 +25,7 @@ export type ShortcutDef = {
     | "shortcutNavProducts"
     | "shortcutNavCustomers"
     | "shortcutNavHistory"
+    | "shortcutNavReport"
     | "shortcutNavSettings"
     | "shortcutFocusSearch"
     | "shortcutFocusCart"
@@ -65,10 +67,16 @@ export const SHORTCUTS: ShortcutDef[] = [
     match: (e) => isMod(e) && e.key === "4",
   },
   {
-    action: "nav.settings",
+    action: "nav.report",
     label: "Ctrl+5",
-    descriptionKey: "shortcutNavSettings",
+    descriptionKey: "shortcutNavReport",
     match: (e) => isMod(e) && e.key === "5",
+  },
+  {
+    action: "nav.settings",
+    label: "Ctrl+6",
+    descriptionKey: "shortcutNavSettings",
+    match: (e) => isMod(e) && e.key === "6",
   },
   {
     action: "focus.search",
@@ -99,13 +107,20 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
   return el.isContentEditable;
 }
 
-export type AppModule = "pos" | "products" | "customers" | "history" | "settings";
+export type AppModule =
+  | "pos"
+  | "products"
+  | "customers"
+  | "history"
+  | "report"
+  | "settings";
 
 export const MODULE_ORDER: AppModule[] = [
   "pos",
   "products",
   "customers",
   "history",
+  "report",
   "settings",
 ];
 
@@ -119,6 +134,8 @@ export function moduleFromAction(action: ShortcutAction): AppModule | null {
       return "customers";
     case "nav.history":
       return "history";
+    case "nav.report":
+      return "report";
     case "nav.settings":
       return "settings";
     default:

@@ -10,7 +10,7 @@ import {
 import type { AppLocale, AuthSelectableProfile, ConnectionSettingsView } from "@teka/shared";
 import logo from "../assets/teka-hub-logo.svg";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
-import { t } from "../i18n/messages";
+import { friendlyLoginError, t } from "../i18n/messages";
 import { LanguageSwitch } from "./LanguageSwitch";
 
 type Props = {
@@ -63,7 +63,7 @@ export function LoginScreen({
     try {
       await onLogin(loginId.trim(), password, userId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t(locale, "loginError"));
+      setError(friendlyLoginError(locale, err));
     } finally {
       setBusy(false);
     }
@@ -81,6 +81,7 @@ export function LoginScreen({
     >
       <div style={{ width: "100%", maxWidth: 440 }}>
         <div
+          className="tek-caption-safe"
           style={{
             display: "flex",
             justifyContent: "flex-end",

@@ -14,6 +14,11 @@
   --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
   --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --radius: 0.625rem;
+  /* Windows titleBarOverlay : largeur des boutons min/max/close à droite. */
+  --tek-caption-right: max(
+    16px,
+    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))
+  );
 }
 
 * {
@@ -193,6 +198,22 @@ h3 {
   padding: 10px 16px;
   border-bottom: 1px solid var(--tek-line);
   background: var(--tek-card);
+}
+
+/* Topbar / bannière MAJ : ne pas coller aux boutons fenêtre Windows. */
+.tek-topbar {
+  padding-right: var(--tek-caption-right);
+}
+
+.tek-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tek-caption-safe {
+  padding-right: var(--tek-caption-right);
+  box-sizing: border-box;
 }
 
 .tek-statusbar {

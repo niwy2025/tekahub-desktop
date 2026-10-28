@@ -7,7 +7,14 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from "react";
-import type { AppLocale, Sale, SaleHistoryGroup, SaleHistoryQuery } from "@teka/shared";
+import {
+  PAYMENT_METHODS,
+  type AppLocale,
+  type PaymentMethod,
+  type Sale,
+  type SaleHistoryGroup,
+  type SaleHistoryQuery,
+} from "@teka/shared";
 import {
   SaleDetailSkeleton,
   SaleHistorySkeleton,
@@ -15,6 +22,14 @@ import {
 import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { formatPrice } from "../hooks/useProducts";
 import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
+
+const PAYMENT_LABEL_KEY: Record<PaymentMethod, MessageKey> = {
+  especes: "salePayEspeces",
+  mobile_money: "salePayMobileMoney",
+  carte_bancaire: "salePayCarte",
+  virement: "salePayVirement",
+  autre: "salePayAutre",
+};
 
 function isCancelled(statut?: string | null): boolean {
   return (statut ?? "").toLowerCase().includes("annul");
@@ -56,6 +71,15 @@ type Props = {
 function toNum(value: number | string | null | undefined): number {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function remainingOf(sale: Sale): number {
+  return Math.max(0, Math.round(toNum(sale.montant_restant) * 100) / 100);
+}
+
+function canCollectRemaining(sale: Sale): boolean {
+  if (isCancelled(sale.statut)) return false;
+  return remainingOf(sale) > 0.005;
 }
 
 function ymdLocal(d: Date): string {
@@ -150,6 +174,11 @@ export function HistoryScreen({
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payBusy, setPayBusy] = useState(false);
+  const [payMsg, setPayMsg] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("especes");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -251,10 +280,16 @@ export function HistoryScreen({
       setPrintMsg(null);
       setCancelConfirm(false);
       setCancelMsg(null);
+      setPayOpen(false);
+      setPayMsg(null);
+      setPayBusy(false);
       setDetailLoading(true);
       try {
         const sale = await window.teka.getSaleDetail(saleId);
         setDetail(sale);
+        const rem = remainingOf(sale);
+        setPayAmount(rem > 0 ? String(rem) : "");
+        setPayMethod("especes");
       } catch (err) {
         setDetailError(friendlyNetworkError(locale, err, "historyError"));
       } finally {
@@ -271,6 +306,9 @@ export function HistoryScreen({
     setPrintMsg(null);
     setCancelConfirm(false);
     setCancelMsg(null);
+    setPayOpen(false);
+    setPayMsg(null);
+    setPayBusy(false);
     searchRef.current?.focus();
   }
 
@@ -307,6 +345,40 @@ export function HistoryScreen({
       setCancelMsg(friendlyNetworkError(locale, err, "historyCancelError"));
     } finally {
       setCancelBusy(false);
+    }
+  }
+
+  async function confirmCollectPayment() {
+    if (!detail || payBusy || !canCollectRemaining(detail)) return;
+    const remaining = remainingOf(detail);
+    const amount = Math.round(Number(payAmount.replace(",", ".")) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPayMsg(t(locale, "historyPayInvalid"));
+      return;
+    }
+    if (amount > remaining + 0.0001) {
+      setPayMsg(t(locale, "historyPayTooHigh").replace("{max}", String(remaining)));
+      return;
+    }
+
+    setPayBusy(true);
+    setPayMsg(null);
+    try {
+      const updated = await window.teka.recordSalePayment({
+        saleId: detail.id,
+        montant: amount,
+        moyen_paiement: payMethod,
+      });
+      setDetail({ ...detail, ...updated });
+      setPayOpen(false);
+      setPayMsg(t(locale, "historyPayOk"));
+      const nextRemaining = remainingOf({ ...detail, ...updated });
+      setPayAmount(nextRemaining > 0 ? String(nextRemaining) : "");
+      void load();
+    } catch (err) {
+      setPayMsg(friendlyNetworkError(locale, err, "historyPayError"));
+    } finally {
+      setPayBusy(false);
     }
   }
 
@@ -562,14 +634,36 @@ export function HistoryScreen({
           cancelBusy={cancelBusy}
           cancelConfirm={cancelConfirm}
           cancelMsg={cancelMsg}
+          payOpen={payOpen}
+          payBusy={payBusy}
+          payMsg={payMsg}
+          payAmount={payAmount}
+          payMethod={payMethod}
+          onPayAmountChange={setPayAmount}
+          onPayMethodChange={setPayMethod}
           onClose={closeDetail}
           onPrint={() => void reprint()}
           onAskCancel={() => {
             setCancelConfirm(true);
             setCancelMsg(null);
+            setPayOpen(false);
           }}
           onAbortCancel={() => setCancelConfirm(false)}
           onConfirmCancel={() => void confirmCancelSale()}
+          onAskPay={() => {
+            if (!detail) return;
+            setCancelConfirm(false);
+            setPayOpen(true);
+            setPayMsg(null);
+            const rem = remainingOf(detail);
+            setPayAmount(rem > 0 ? String(rem) : "");
+            setPayMethod("especes");
+          }}
+          onAbortPay={() => {
+            setPayOpen(false);
+            setPayMsg(null);
+          }}
+          onConfirmPay={() => void confirmCollectPayment()}
         />
       ) : null}
     </div>
@@ -589,11 +683,21 @@ function SaleDetailModal({
   cancelBusy,
   cancelConfirm,
   cancelMsg,
+  payOpen,
+  payBusy,
+  payMsg,
+  payAmount,
+  payMethod,
+  onPayAmountChange,
+  onPayMethodChange,
   onClose,
   onPrint,
   onAskCancel,
   onAbortCancel,
   onConfirmCancel,
+  onAskPay,
+  onAbortPay,
+  onConfirmPay,
 }: {
   locale: AppLocale;
   currency?: string | null;
@@ -607,11 +711,21 @@ function SaleDetailModal({
   cancelBusy: boolean;
   cancelConfirm: boolean;
   cancelMsg: string | null;
+  payOpen: boolean;
+  payBusy: boolean;
+  payMsg: string | null;
+  payAmount: string;
+  payMethod: PaymentMethod;
+  onPayAmountChange: (value: string) => void;
+  onPayMethodChange: (value: PaymentMethod) => void;
   onClose: () => void;
   onPrint: () => void;
   onAskCancel: () => void;
   onAbortCancel: () => void;
   onConfirmCancel: () => void;
+  onAskPay: () => void;
+  onAbortPay: () => void;
+  onConfirmPay: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, true);
@@ -621,6 +735,10 @@ function SaleDetailModal({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+        if (payOpen && !payBusy) {
+          onAbortPay();
+          return;
+        }
         if (cancelConfirm && !cancelBusy) {
           onAbortCancel();
           return;
@@ -630,12 +748,14 @@ function SaleDetailModal({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose, cancelConfirm, cancelBusy, onAbortCancel]);
+  }, [onClose, cancelConfirm, cancelBusy, onAbortCancel, payOpen, payBusy, onAbortPay]);
 
   const cur = currency ?? sale?.devise_principale ?? null;
   const canCancel = Boolean(
     allowCancel && sale && isValidated(sale.statut) && !isCancelled(sale.statut),
   );
+  const canPay = Boolean(sale && canCollectRemaining(sale));
+  const remaining = sale ? remainingOf(sale) : 0;
 
   return (
     <div role="presentation" style={backdrop} onClick={onClose}>
@@ -733,6 +853,24 @@ function SaleDetailModal({
                 {formatPrice(sale.montant_total, locale, cur)}
               </strong>
             </div>
+            <div style={{ ...totalRow, marginTop: 8, borderTop: "none", paddingTop: 0 }}>
+              <span>{t(locale, "historyPaid")}</span>
+              <strong>{formatPrice(sale.montant_paye, locale, cur)}</strong>
+            </div>
+            {remaining > 0.005 ? (
+              <div
+                style={{
+                  ...totalRow,
+                  marginTop: 8,
+                  borderTop: "none",
+                  paddingTop: 0,
+                  color: "var(--tek-danger)",
+                }}
+              >
+                <span>{t(locale, "historyRemaining")}</span>
+                <strong style={{ fontSize: 18 }}>{formatPrice(remaining, locale, cur)}</strong>
+              </div>
+            ) : null}
 
             {printMsg ? (
               <p
@@ -755,6 +893,18 @@ function SaleDetailModal({
                 }}
               >
                 {cancelMsg}
+              </p>
+            ) : null}
+
+            {payMsg ? (
+              <p
+                style={{
+                  margin: "12px 0 0",
+                  fontSize: 13,
+                  color: payMsg === t(locale, "historyPayOk") ? "#15803d" : "var(--tek-danger)",
+                }}
+              >
+                {payMsg}
               </p>
             ) : null}
 
@@ -782,14 +932,133 @@ function SaleDetailModal({
                   </button>
                 </div>
               </div>
+            ) : payOpen ? (
+              <div style={cancelConfirmBox}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 650 }}>
+                  {t(locale, "historyPayTitle")}
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--tek-ash)" }}>
+                  {t(locale, "historyPayHint").replace(
+                    "{amount}",
+                    formatPrice(remaining, locale, cur),
+                  )}
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginTop: 12,
+                  }}
+                  role="group"
+                  aria-label={t(locale, "salePaymentMethod")}
+                >
+                  {PAYMENT_METHODS.map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      disabled={payBusy}
+                      onClick={() => onPayMethodChange(method)}
+                      style={
+                        payMethod === method
+                          ? {
+                              border: "1px solid transparent",
+                              background: "var(--tek-yellow)",
+                              color: "var(--tek-black)",
+                              padding: "8px 12px",
+                              borderRadius: 999,
+                              fontWeight: 650,
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }
+                          : {
+                              border: "1px solid var(--tek-line)",
+                              background: "transparent",
+                              color: "var(--tek-ink)",
+                              padding: "8px 12px",
+                              borderRadius: 999,
+                              fontWeight: 650,
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }
+                      }
+                    >
+                      {t(locale, PAYMENT_LABEL_KEY[method])}
+                    </button>
+                  ))}
+                </div>
+                <label
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    marginTop: 12,
+                    fontSize: 12,
+                    fontWeight: 650,
+                    color: "var(--tek-ash)",
+                  }}
+                >
+                  {t(locale, "historyPayAmount")}
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={payAmount}
+                    disabled={payBusy}
+                    onChange={(e) => onPayAmountChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        onConfirmPay();
+                      }
+                    }}
+                    style={{
+                      border: "1px solid var(--tek-line)",
+                      borderRadius: 12,
+                      padding: "12px 14px",
+                      fontSize: 18,
+                      fontWeight: 800,
+                      fontVariantNumeric: "tabular-nums",
+                      background: "var(--tek-bg)",
+                      color: "var(--tek-ink)",
+                    }}
+                  />
+                </label>
+                <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    disabled={payBusy}
+                    onClick={onConfirmPay}
+                    style={{ ...primaryBtn, opacity: payBusy ? 0.7 : 1 }}
+                  >
+                    {payBusy ? t(locale, "historyPaying") : t(locale, "historyPayConfirm")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={payBusy}
+                    onClick={onAbortPay}
+                    style={cancelBtn}
+                  >
+                    {t(locale, "posQtyCancel")}
+                  </button>
+                </div>
+              </div>
             ) : (
               <div style={actions}>
+                {canPay ? (
+                  <button
+                    type="button"
+                    disabled={printBusy || cancelBusy || payBusy}
+                    onClick={onAskPay}
+                    style={primaryBtn}
+                  >
+                    {t(locale, "historyPay")}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={printBusy || cancelBusy || isCancelled(sale.statut)}
                   onClick={onPrint}
                   style={{
-                    ...primaryBtn,
+                    ...(canPay ? ghostBtn : primaryBtn),
                     opacity: printBusy || isCancelled(sale.statut) ? 0.7 : 1,
                   }}
                 >
@@ -805,7 +1074,12 @@ function SaleDetailModal({
                     {t(locale, "historyCancel")}
                   </button>
                 ) : null}
-                <button type="button" onClick={onClose} style={cancelBtn} disabled={cancelBusy}>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={cancelBtn}
+                  disabled={cancelBusy || payBusy}
+                >
                   {t(locale, "historyDetailClose")}
                 </button>
               </div>

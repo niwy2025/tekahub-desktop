@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { AppLocale } from "@teka/shared";
+import { availableStock, clampQty } from "../catalog/stock";
 import { formatPrice } from "../hooks/useProducts";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { t } from "../i18n/messages";
@@ -26,18 +27,20 @@ export function CartQtyDialog({
   onRemove,
   onClose,
 }: Props) {
-  const [qty, setQty] = useState(line.qty);
+  const stockMax = availableStock(line.product);
+  const [qty, setQty] = useState(() => clampQty(line.product, line.qty) || 1);
   const qtyRef = useRef(qty);
   const dialogRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const unit = Number(line.product.prix_vente_ttc ?? line.product.prix_vente ?? 0) || 0;
+  const atStockLimit = stockMax !== null && qty >= stockMax;
 
   qtyRef.current = qty;
   useFocusTrap(dialogRef, true);
 
   useEffect(() => {
-    setQty(line.qty);
-  }, [line.product.id, line.qty]);
+    setQty(clampQty(line.product, line.qty) || 1);
+  }, [line.product, line.qty]);
 
   useEffect(() => {
     confirmRef.current?.focus();
@@ -86,7 +89,7 @@ export function CartQtyDialog({
       if (e.key === "ArrowUp" || e.key === "ArrowRight" || e.key === "+" || e.key === "Add") {
         e.preventDefault();
         e.stopPropagation();
-        setQty((prev) => Math.max(1, prev + 1));
+        setQty((prev) => Math.max(1, clampQty(line.product, prev + 1) || prev));
         return;
       }
       if (e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "-" || e.key === "Subtract") {
@@ -98,10 +101,13 @@ export function CartQtyDialog({
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [onClose, onConfirm, onRemove]);
+  }, [line.product, onClose, onConfirm, onRemove]);
 
   function bump(delta: number) {
-    setQty((prev) => Math.max(1, prev + delta));
+    setQty((prev) => {
+      if (delta > 0) return Math.max(1, clampQty(line.product, prev + delta) || prev);
+      return Math.max(1, prev + delta);
+    });
   }
 
   return (
@@ -139,13 +145,29 @@ export function CartQtyDialog({
         </div>
 
         <p style={hint}>{t(locale, "posQtyHint")}</p>
+        {stockMax !== null ? (
+          <p
+            style={{
+              ...hint,
+              marginTop: 8,
+              color: atStockLimit ? "var(--tek-danger)" : "var(--tek-ash)",
+            }}
+          >
+            {atStockLimit
+              ? t(locale, "posStockLimit").replace("{max}", String(stockMax))
+              : `${t(locale, "stock")}: ${stockMax}`}
+          </p>
+        ) : (
+          <p style={{ ...hint, marginTop: 8 }}>{t(locale, "posStockUnlimited")}</p>
+        )}
 
         <div style={actions}>
           <button
             ref={confirmRef}
             type="button"
             style={confirmBtn}
-            onClick={() => onConfirm(qty)}
+            disabled={stockMax !== null && stockMax < 1}
+            onClick={() => onConfirm(clampQty(line.product, qty) || 1)}
           >
             {t(locale, "posQtyConfirm")}
           </button>

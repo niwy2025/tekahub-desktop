@@ -57,16 +57,32 @@ export async function login(
   password: string,
   userId?: string,
 ): Promise<AuthLoginResult> {
-  // Comme le mobile / API : champ `login` = email OU téléphone
-  const payload = await apiRequest<LoginApiResponse>("/api/auth/login", {
-    method: "POST",
-    auth: false,
-    body: {
-      login: loginId.trim(),
-      password,
-      ...(userId ? { user_id: userId } : {}),
-    },
-  });
+  let payload: LoginApiResponse;
+  try {
+    // Comme le mobile / API : champ `login` = email OU téléphone
+    payload = await apiRequest<LoginApiResponse>("/api/auth/login", {
+      method: "POST",
+      auth: false,
+      body: {
+        login: loginId.trim(),
+        password,
+        ...(userId ? { user_id: userId } : {}),
+      },
+    });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 401) {
+        throw new Error("TEKA_AUTH:INVALID_CREDENTIALS");
+      }
+      if (err.status === 403) {
+        throw new Error("TEKA_AUTH:ACCOUNT_DISABLED");
+      }
+      if (err.status === 422) {
+        throw new Error("TEKA_AUTH:INVALID_CREDENTIALS");
+      }
+    }
+    throw err;
+  }
 
   if (payload.requires_profile_selection && payload.profiles) {
     return {
@@ -78,7 +94,7 @@ export async function login(
 
   const token = extractToken(payload);
   if (!token) {
-    throw new Error("Aucun token reçu du serveur");
+    throw new Error("TEKA_AUTH:NO_TOKEN");
   }
 
   setSessionToken(token);

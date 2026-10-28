@@ -9,14 +9,21 @@ import {
   type PackLocalState,
   type PackUpdateState,
   type Client,
+  type ClientWritePayload,
   type CancelSalePayload,
   type CreateSalePayload,
+  type RecordSalePaymentPayload,
   type ConnectionSettings,
   type ConnectionSettingsView,
+  type DailyReport,
+  type DailyReportQuery,
+  type FlushOfflineQueueResult,
+  type OfflineQueueState,
   type PrinterInfo,
   type PrinterSettings,
   type Product,
   type ProductListQuery,
+  type SellableProductQuery,
   type Sale,
   type SaleClientCheckPayload,
   type SaleClientCheckResponse,
@@ -28,8 +35,14 @@ import {
 } from "@teka/shared";
 import { fetchMe, getSessionInfo, login, logout, restoreSession } from "./auth";
 import { ApiError, setUnauthorizedHandler } from "./api-client";
-import { listProducts } from "./catalog";
-import { listAllClients } from "./clients";
+import { listProducts, listSellableProducts } from "./catalog";
+import { createClient, listAllClients, updateClient } from "./clients";
+import { getDailyReport } from "./daily-report";
+import {
+  flushOfflineQueue,
+  getOfflineQueueState,
+  setOfflineQueueChangeHandler,
+} from "./offline-queue";
 import { printSaleReceipt } from "./print-receipt";
 import { getPrinterSettings, setPrinterSettings } from "./printer-settings";
 import {
@@ -43,6 +56,7 @@ import {
   createSale,
   getSaleDetail,
   listSaleHistory,
+  recordSalePayment,
 } from "./sales";
 import { appConfig } from "./config";
 import { getAppLocale, getDeviceLocale, setAppLocale } from "./locale";
@@ -71,6 +85,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send(IpcChannels.onSessionExpired);
+    }
+  });
+
+  setOfflineQueueChangeHandler((state) => {
+    const win = getWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(IpcChannels.onOfflineQueueChanged, state);
     }
   });
 
@@ -178,6 +199,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     },
   );
 
+  ipcMain.handle(
+    IpcChannels.listSellableProducts,
+    async (_e, query?: SellableProductQuery): Promise<Product[]> => {
+      try {
+        return await listSellableProducts(query ?? {});
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
   ipcMain.handle(IpcChannels.listClients, async (): Promise<Client[]> => {
     try {
       return await listAllClients();
@@ -185,6 +217,31 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       throw toIpcError(err);
     }
   });
+
+  ipcMain.handle(
+    IpcChannels.createClient,
+    async (_e, payload: ClientWritePayload): Promise<Client> => {
+      try {
+        return await createClient(payload);
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.updateClient,
+    async (
+      _e,
+      payload: { clientId: string; patch: Partial<ClientWritePayload> & { actif?: boolean } },
+    ): Promise<Client> => {
+      try {
+        return await updateClient(payload.clientId, payload.patch ?? {});
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
 
   ipcMain.handle(
     IpcChannels.checkSaleClient,
@@ -213,6 +270,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async (_e, payload: CancelSalePayload): Promise<Sale> => {
       try {
         return await cancelSale(payload);
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.recordSalePayment,
+    async (_e, payload: RecordSalePaymentPayload): Promise<Sale> => {
+      try {
+        return await recordSalePayment(payload);
       } catch (err) {
         throw toIpcError(err);
       }
@@ -290,6 +358,30 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           description: p.description,
           isDefault: Boolean(p.isDefault),
         }));
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(IpcChannels.getOfflineQueueState, (): OfflineQueueState => getOfflineQueueState());
+
+  ipcMain.handle(
+    IpcChannels.flushOfflineQueue,
+    async (): Promise<FlushOfflineQueueResult> => {
+      try {
+        return await flushOfflineQueue();
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.getDailyReport,
+    async (_e, query?: DailyReportQuery): Promise<DailyReport> => {
+      try {
+        return await getDailyReport(query ?? {});
       } catch (err) {
         throw toIpcError(err);
       }

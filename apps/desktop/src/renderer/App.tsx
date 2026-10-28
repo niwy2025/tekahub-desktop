@@ -16,13 +16,16 @@ import {
   navigateModuleHash,
   syncModuleHash,
 } from "./navigation/moduleRoute";
+import { useOfflineQueue } from "./hooks/useOfflineQueue";
 import { CustomersScreen } from "./screens/CustomersScreen";
+import { DailyReportScreen } from "./screens/DailyReportScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
 import { PosScreen, type PosScreenHandle } from "./screens/PosScreen";
 import { ProductsScreen } from "./screens/ProductsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { AppShell } from "./shell/AppShell";
 import { ShortcutsDocsScreen } from "./screens/ShortcutsDocsScreen";
+import { refreshCatalog } from "./catalog/productCatalogStore";
 
 export function App() {
   const {
@@ -40,6 +43,7 @@ export function App() {
   } = useAuth();
   // Toujours écouter l’updater (même avant login) pour afficher la bannière MAJ.
   const updates = useUpdates(true);
+  const offlineQueue = useOfflineQueue(Boolean(user));
   const [module, setModuleState] = useState<AppModule>(() => moduleFromHash());
   const [helpOpen, setHelpOpen] = useState(false);
   const posSearchRef = useRef<HTMLInputElement>(null);
@@ -73,6 +77,7 @@ export function App() {
       "nav.products": () => navigate("nav.products"),
       "nav.customers": () => navigate("nav.customers"),
       "nav.history": () => navigate("nav.history"),
+      "nav.report": () => navigate("nav.report"),
       "nav.settings": () => navigate("nav.settings"),
       "focus.search": () => {
         setModule("pos");
@@ -178,6 +183,9 @@ export function App() {
         />
       );
       break;
+    case "report":
+      content = <DailyReportScreen locale={locale} currency={currency} />;
+      break;
     case "settings":
       content = (
         <SettingsScreen
@@ -217,6 +225,15 @@ export function App() {
           }}
           onLogout={() => void logout()}
           onOpenHelp={() => setHelpOpen(true)}
+          online={offlineQueue.online}
+          offlineQueue={offlineQueue.state}
+          onFlushQueue={() => {
+            void offlineQueue.flush().then((result) => {
+              if (result && result.flushed > 0) {
+                void refreshCatalog({ silent: true, locale });
+              }
+            });
+          }}
         >
           {helpOpen ? (
             <ShortcutsDocsScreen locale={locale} onClose={() => setHelpOpen(false)} />

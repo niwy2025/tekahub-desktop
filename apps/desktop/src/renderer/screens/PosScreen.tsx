@@ -9,6 +9,13 @@ import {
   type RefObject,
 } from "react";
 import type { AppLocale, Product } from "@teka/shared";
+import { refreshCatalog } from "../catalog/productCatalogStore";
+import {
+  availableStock,
+  canSetQty,
+  clampQty,
+  formatStockLabel,
+} from "../catalog/stock";
 import { CartPanel, type CartLine } from "../components/CartPanel";
 import { CartQtyDialog } from "../components/CartQtyDialog";
 import { SaleValidateModal } from "../components/SaleValidateModal";
@@ -57,7 +64,21 @@ export function PosScreen({
   const [qtyEditId, setQtyEditId] = useState<string | null>(null);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [stockMsg, setStockMsg] = useState<string | null>(null);
+  const stockMsgTimer = useRef<number | null>(null);
   useAutoFocus(searchRef);
+
+  function showStockMsg(message: string) {
+    setStockMsg(message);
+    if (stockMsgTimer.current !== null) window.clearTimeout(stockMsgTimer.current);
+    stockMsgTimer.current = window.setTimeout(() => setStockMsg(null), 2200);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (stockMsgTimer.current !== null) window.clearTimeout(stockMsgTimer.current);
+    };
+  }, []);
 
   const { products, allProducts, loading, error, reload } = useProducts(query, locale);
   const qtyEditLine = qtyEditId
@@ -117,11 +138,21 @@ export function PosScreen({
   useImperativeHandle(handleRef, () => ({ focusCart, focusSearch }), [cart, cartLineId]);
 
   function addToCart(product: Product) {
+    const max = availableStock(product);
     setCart((prev) => {
       const existing = prev.find((line) => line.product.id === product.id);
+      const nextQty = (existing?.qty ?? 0) + 1;
+      if (!canSetQty(product, nextQty)) {
+        showStockMsg(
+          max === 0
+            ? t(locale, "posStockEmpty")
+            : t(locale, "posStockLimit").replace("{max}", String(max ?? 0)),
+        );
+        return prev;
+      }
       if (existing) {
         return prev.map((line) =>
-          line.product.id === product.id ? { ...line, qty: line.qty + 1 } : line,
+          line.product.id === product.id ? { ...line, qty: nextQty, product } : line,
         );
       }
       return [...prev, { product, qty: 1 }];
@@ -179,11 +210,21 @@ export function PosScreen({
   }
 
   function increment(productId: string) {
-    setCart((prev) =>
-      prev.map((line) =>
-        line.product.id === productId ? { ...line, qty: line.qty + 1 } : line,
-      ),
-    );
+    setCart((prev) => {
+      const line = prev.find((l) => l.product.id === productId);
+      if (!line) return prev;
+      const nextQty = line.qty + 1;
+      if (!canSetQty(line.product, nextQty)) {
+        const max = availableStock(line.product);
+        showStockMsg(
+          max === 0
+            ? t(locale, "posStockEmpty")
+            : t(locale, "posStockLimit").replace("{max}", String(max ?? 0)),
+        );
+        return prev;
+      }
+      return prev.map((l) => (l.product.id === productId ? { ...l, qty: nextQty } : l));
+    });
   }
 
   function decrement(productId: string) {
@@ -202,9 +243,18 @@ export function PosScreen({
       return;
     }
     setCart((prev) =>
-      prev.map((line) =>
-        line.product.id === productId ? { ...line, qty } : line,
-      ),
+      prev.map((line) => {
+        if (line.product.id !== productId) return line;
+        const clamped = clampQty(line.product, qty);
+        if (clamped <= 0) return line;
+        if (clamped < qty) {
+          const max = availableStock(line.product);
+          if (max !== null) {
+            showStockMsg(t(locale, "posStockLimit").replace("{max}", String(max)));
+          }
+        }
+        return { ...line, qty: clamped };
+      }),
     );
   }
 
@@ -237,6 +287,7 @@ export function PosScreen({
     setCartFocused(false);
     setListFocused(false);
     searchRef.current?.focus();
+    void refreshCatalog({ silent: true, locale });
   }
 
   function openQtyEdit(productId: string) {
@@ -360,6 +411,22 @@ export function PosScreen({
   return (
     <div style={{ padding: 24, display: "grid", gap: 16, height: "100%" }}>
       <h1 style={{ margin: 0, fontSize: 28 }}>{t(locale, "posTitle")}</h1>
+      {stockMsg ? (
+        <p
+          role="status"
+          style={{
+            margin: 0,
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "rgba(192, 38, 38, 0.1)",
+            color: "var(--tek-danger)",
+            fontSize: 13,
+            fontWeight: 650,
+          }}
+        >
+          {stockMsg}
+        </p>
+      ) : null}
 
       <div
         style={{
@@ -502,8 +569,7 @@ export function PosScreen({
                         {formatPrice(price, locale, currency)}
                       </div>
                       <div style={{ fontSize: 11, color: "var(--tek-ash)", marginTop: 2 }}>
-                        {t(locale, "stock")}:{" "}
-                        {product.stock_disponible ?? product.stock ?? "—"}
+                        {t(locale, "stock")}: {formatStockLabel(product)}
                       </div>
                     </div>
                   </button>

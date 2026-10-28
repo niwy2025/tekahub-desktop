@@ -9,14 +9,17 @@ import {
   type PackLocalState,
   type PackUpdateState,
   type Client,
+  type ClientWritePayload,
   type CancelSalePayload,
   type CreateSalePayload,
+  type RecordSalePaymentPayload,
   type ConnectionSettings,
   type ConnectionSettingsView,
   type PrinterInfo,
   type PrinterSettings,
   type Product,
   type ProductListQuery,
+  type SellableProductQuery,
   type Sale,
   type SaleClientCheckPayload,
   type SaleClientCheckResponse,
@@ -25,6 +28,10 @@ import {
   type SaleReceiptPayload,
   type SessionInfo,
   type ShellUpdateState,
+  type DailyReport,
+  type DailyReportQuery,
+  type FlushOfflineQueueResult,
+  type OfflineQueueState,
 } from "@teka/shared";
 
 const api = {
@@ -65,13 +72,24 @@ const api = {
     ipcRenderer.invoke(IpcChannels.setLocale, locale),
   listProducts: (query?: ProductListQuery): Promise<Product[]> =>
     ipcRenderer.invoke(IpcChannels.listProducts, query),
+  listSellableProducts: (query?: SellableProductQuery): Promise<Product[]> =>
+    ipcRenderer.invoke(IpcChannels.listSellableProducts, query),
   listClients: (): Promise<Client[]> => ipcRenderer.invoke(IpcChannels.listClients),
+  createClient: (payload: ClientWritePayload): Promise<Client> =>
+    ipcRenderer.invoke(IpcChannels.createClient, payload),
+  updateClient: (
+    clientId: string,
+    patch: Partial<ClientWritePayload> & { actif?: boolean },
+  ): Promise<Client> =>
+    ipcRenderer.invoke(IpcChannels.updateClient, { clientId, patch }),
   checkSaleClient: (payload: SaleClientCheckPayload): Promise<SaleClientCheckResponse> =>
     ipcRenderer.invoke(IpcChannels.checkSaleClient, payload),
   createSale: (payload: CreateSalePayload): Promise<Sale> =>
     ipcRenderer.invoke(IpcChannels.createSale, payload),
   cancelSale: (payload: CancelSalePayload): Promise<Sale> =>
     ipcRenderer.invoke(IpcChannels.cancelSale, payload),
+  recordSalePayment: (payload: RecordSalePaymentPayload): Promise<Sale> =>
+    ipcRenderer.invoke(IpcChannels.recordSalePayment, payload),
   listSaleHistory: (query?: SaleHistoryQuery): Promise<SaleHistoryResponse> =>
     ipcRenderer.invoke(IpcChannels.listSaleHistory, query),
   getSaleDetail: (saleId: string): Promise<Sale> =>
@@ -91,10 +109,21 @@ const api = {
     payload: SaleReceiptPayload,
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.printSaleReceipt, payload),
+  getOfflineQueueState: (): Promise<OfflineQueueState> =>
+    ipcRenderer.invoke(IpcChannels.getOfflineQueueState),
+  flushOfflineQueue: (): Promise<FlushOfflineQueueResult> =>
+    ipcRenderer.invoke(IpcChannels.flushOfflineQueue),
+  getDailyReport: (query?: DailyReportQuery): Promise<DailyReport> =>
+    ipcRenderer.invoke(IpcChannels.getDailyReport, query),
   onSessionExpired: (cb: () => void): (() => void) => {
     const listener = (): void => cb();
     ipcRenderer.on(IpcChannels.onSessionExpired, listener);
     return () => ipcRenderer.removeListener(IpcChannels.onSessionExpired, listener);
+  },
+  onOfflineQueueChanged: (cb: (state: OfflineQueueState) => void): (() => void) => {
+    const listener = (_: IpcRendererEvent, state: OfflineQueueState) => cb(state);
+    ipcRenderer.on(IpcChannels.onOfflineQueueChanged, listener);
+    return () => ipcRenderer.removeListener(IpcChannels.onOfflineQueueChanged, listener);
   },
 };
 

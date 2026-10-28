@@ -45,6 +45,7 @@ export const SHORTCUT_DOC_META: Record<
   "nav.products": { detailKey: "shortcutNavProductsDetail", group: "navigation" },
   "nav.customers": { detailKey: "shortcutNavCustomersDetail", group: "navigation" },
   "nav.history": { detailKey: "shortcutNavHistoryDetail", group: "navigation" },
+  "nav.report": { detailKey: "shortcutNavReportDetail", group: "navigation" },
   "nav.settings": { detailKey: "shortcutNavSettingsDetail", group: "navigation" },
   "focus.search": { detailKey: "shortcutFocusSearchDetail", group: "pos-search" },
   "focus.cart": { detailKey: "shortcutFocusCartDetail", group: "pos-cart" },

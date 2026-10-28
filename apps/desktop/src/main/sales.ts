@@ -2,6 +2,7 @@ import {
   canCancelSales,
   type CancelSalePayload,
   type CreateSalePayload,
+  type RecordSalePaymentPayload,
   type Sale,
   type SaleClientCheckPayload,
   type SaleClientCheckResponse,
@@ -10,6 +11,11 @@ import {
   type SaleHistoryResponse,
 } from "@teka/shared";
 import { ApiError, apiRequest } from "./api-client";
+import {
+  enqueueOfflineSale,
+  flushOfflineQueue,
+  isNetworkFailure,
+} from "./offline-queue";
 import { getCachedUser } from "./session";
 
 export async function checkSaleClient(
@@ -22,20 +28,34 @@ export async function checkSaleClient(
 }
 
 export async function createSale(payload: CreateSalePayload): Promise<Sale> {
-  const data = await apiRequest<Sale | { data?: Sale; vente?: Sale; sale?: Sale }>(
-    "/api/ventes",
-    {
-      method: "POST",
-      body: payload,
-    },
-  );
+  try {
+    const data = await apiRequest<Sale | { data?: Sale; vente?: Sale; sale?: Sale }>(
+      "/api/ventes",
+      {
+        method: "POST",
+        body: payload,
+      },
+    );
 
-  if (data && typeof data === "object") {
-    if ("data" in data && data.data) return data.data;
-    if ("vente" in data && data.vente) return data.vente;
-    if ("sale" in data && data.sale) return data.sale;
+    let sale: Sale;
+    if (data && typeof data === "object") {
+      if ("data" in data && data.data) sale = data.data;
+      else if ("vente" in data && data.vente) sale = data.vente;
+      else if ("sale" in data && data.sale) sale = data.sale;
+      else sale = data as Sale;
+    } else {
+      sale = data as Sale;
+    }
+
+    // Après une vente online, tenter d’évacuer la file hors-ligne.
+    void flushOfflineQueue().catch(() => undefined);
+    return sale;
+  } catch (err) {
+    if (isNetworkFailure(err)) {
+      return enqueueOfflineSale(payload);
+    }
+    throw err;
   }
-  return data as Sale;
 }
 
 /** Historique POS de l’utilisateur connecté, groupé par jour. */
@@ -69,6 +89,26 @@ export async function getSaleDetail(saleId: string): Promise<Sale> {
     return payload.data;
   }
   return payload as Sale;
+}
+
+/** Encaisser un complément sur une vente partielle. */
+export async function recordSalePayment(payload: RecordSalePaymentPayload): Promise<Sale> {
+  const data = await apiRequest<Sale | { data?: Sale }>(
+    `/api/ventes/${payload.saleId}/paiements`,
+    {
+      method: "POST",
+      body: {
+        montant: payload.montant,
+        moyen_paiement: payload.moyen_paiement ?? "especes",
+        notes: payload.notes ?? undefined,
+      },
+    },
+  );
+
+  if (data && typeof data === "object" && "data" in data && data.data) {
+    return data.data;
+  }
+  return data as Sale;
 }
 
 /** Soft-cancel POS : statut annulee (restaure stock côté API). Réservé admin/manager/gérant. */

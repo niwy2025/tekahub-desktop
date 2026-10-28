@@ -210,7 +210,7 @@ export async function printSaleReceipt(payload: SaleReceiptPayload): Promise<{ o
   try {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("print-timeout")), 20000);
+      const timer = setTimeout(() => reject(new Error("print-timeout")), 8000);
       win.webContents.print(
         {
           silent: settings.silentPrint,

@@ -1,4 +1,4 @@
-import type { Product, ProductListQuery } from "@teka/shared";
+import type { Product, ProductListQuery, SellableProductQuery } from "@teka/shared";
 import { apiRequest } from "./api-client";
 
 function asProductArray(payload: unknown): Product[] {
@@ -37,6 +37,23 @@ export async function listProducts(query: ProductListQuery = {}): Promise<Produc
       per_page: query.per_page ?? 50,
       page: query.page ?? 1,
       actif: query.actif === undefined ? true : query.actif,
+    },
+  });
+  return asProductArray(payload);
+}
+
+/**
+ * Catalogue caisse : GET /api/ventes/produits-disponibles
+ * — stock branche / global, pas de plafond 200, uniquement vendables.
+ */
+export async function listSellableProducts(
+  query: SellableProductQuery = {},
+): Promise<Product[]> {
+  const payload = await apiRequest<unknown>("/api/ventes/produits-disponibles", {
+    method: "GET",
+    query: {
+      search: query.search?.trim() || undefined,
+      type: query.type || undefined,
     },
   });
   return asProductArray(payload);

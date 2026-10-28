@@ -88,10 +88,14 @@ export const IpcChannels = {
   getLocale: "teka:get-locale",
   setLocale: "teka:set-locale",
   listProducts: "teka:list-products",
+  listSellableProducts: "teka:list-sellable-products",
   listClients: "teka:list-clients",
+  createClient: "teka:create-client",
+  updateClient: "teka:update-client",
   checkSaleClient: "teka:check-sale-client",
   createSale: "teka:create-sale",
   cancelSale: "teka:cancel-sale",
+  recordSalePayment: "teka:record-sale-payment",
   listSaleHistory: "teka:list-sale-history",
   getSaleDetail: "teka:get-sale-detail",
   getPrinterSettings: "teka:get-printer-settings",
@@ -100,7 +104,11 @@ export const IpcChannels = {
   setConnectionSettings: "teka:set-connection-settings",
   listPrinters: "teka:list-printers",
   printSaleReceipt: "teka:print-sale-receipt",
+  getOfflineQueueState: "teka:get-offline-queue-state",
+  flushOfflineQueue: "teka:flush-offline-queue",
+  getDailyReport: "teka:get-daily-report",
   onSessionExpired: "teka:on-session-expired",
+  onOfflineQueueChanged: "teka:on-offline-queue-changed",
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
@@ -176,6 +184,8 @@ export interface Product {
   prix_vente_ttc?: number | string | null;
   stock?: number | null;
   stock_disponible?: number | null;
+  stock_illimite?: boolean | number | null;
+  stock_source?: "stock" | "illimite" | "service" | "produit" | string | null;
   est_vendable?: boolean | number;
   actif?: boolean | number;
   categorie?: { id: string; nom: string } | null;
@@ -190,6 +200,12 @@ export interface ProductListQuery {
   actif?: boolean;
 }
 
+/** Query pour GET /api/ventes/produits-disponibles (sans plafond pagination). */
+export interface SellableProductQuery {
+  search?: string;
+  type?: "produit" | "service";
+}
+
 /** Client CRM (champs utiles POS). */
 export interface Client {
   id: string;
@@ -201,6 +217,14 @@ export interface Client {
   solde_points_fidelite?: number | string | null;
   actif?: boolean | null;
 }
+
+export type ClientWritePayload = {
+  nom?: string | null;
+  telephone: string;
+  email?: string | null;
+  adresse?: string | null;
+  notes?: string | null;
+};
 
 export type SaleClientCheckPayload = {
   client_id?: string | null;
@@ -235,6 +259,13 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
   "autre",
 ];
 
+export type RecordSalePaymentPayload = {
+  saleId: string;
+  montant: number;
+  moyen_paiement?: PaymentMethod | string | null;
+  notes?: string | null;
+};
+
 export type SaleLinePayload = {
   produit_id: string;
   quantite: number;
@@ -250,6 +281,87 @@ export type CreateSalePayload = {
   statut: string;
   montant_paye_initial?: number;
   lignes: SaleLinePayload[];
+};
+
+/** Vente enregistrée localement en attendant sync/push. */
+export type OfflineQueuedSale = {
+  operation_id: string;
+  entity_id: string;
+  client_sequence: number;
+  created_at: string;
+  payload: CreateSalePayload;
+  last_error?: string | null;
+};
+
+export type OfflineQueueState = {
+  pending: number;
+  items: OfflineQueuedSale[];
+  lastFlushAt: string | null;
+  lastError: string | null;
+  flushing: boolean;
+};
+
+export type FlushOfflineQueueResult = {
+  flushed: number;
+  remaining: number;
+  failed: number;
+  error?: string | null;
+};
+
+export type DailyReportQuery = {
+  date?: string | null;
+  scope?: "utilisateur" | "branche" | "entreprise" | null;
+  branche_id?: string | null;
+};
+
+export type DailyReportSummary = {
+  sales_count: number;
+  items_quantity: number;
+  product_sales_total: number;
+  service_sales_total: number;
+  sales_total: number;
+  expenses_total: number;
+  net_total: number;
+  /** Calculé côté client : total des ventes en espèces. */
+  cash_sales_total?: number;
+};
+
+export type DailyReportSaleRow = {
+  id: string;
+  reference?: string | null;
+  date_vente?: string | null;
+  client?: string | null;
+  amount: number;
+  payment_method?: string | null;
+};
+
+export type DailyReport = {
+  server_time?: string;
+  timezone?: string;
+  currency?: string;
+  date: string;
+  scope?: string;
+  summary: DailyReportSummary;
+  sales_by_type?: Array<{
+    type: string;
+    label?: string;
+    quantity: number;
+    total: number;
+  }>;
+  items?: Array<{
+    produit_id?: string | null;
+    name: string;
+    type?: string;
+    quantity: number;
+    total: number;
+  }>;
+  expenses?: Array<{
+    id: string;
+    description?: string | null;
+    categorie?: string | null;
+    amount: number;
+  }>;
+  sales?: DailyReportSaleRow[];
 };
 
 /** Soft-cancel : PUT /api/ventes/{id} avec statut annulee + lignes. */
@@ -285,6 +397,8 @@ export type Sale = {
   client_telephone?: string | null;
   devise_principale?: string | null;
   items?: SaleItem[] | null;
+  /** true si la vente est en file locale (sync/push en attente). */
+  offline_queued?: boolean;
 };
 
 export type SaleHistoryQuery = {

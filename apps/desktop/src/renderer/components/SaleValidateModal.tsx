@@ -15,6 +15,7 @@ import {
   subscribeClients,
   upsertLocalClient,
 } from "../catalog/clientCatalogStore";
+import { applyLocalStockSale } from "../catalog/productCatalogStore";
 import { formatPrice } from "../hooks/useProducts";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
@@ -286,34 +287,43 @@ export function SaleValidateModal({
         });
       }
 
-      // Impression après vente : ne bloque jamais la réussite de la vente.
-      try {
-        const printer = await window.teka.getPrinterSettings();
-        if (printer.autoPrintAfterSale) {
+      if (sale.offline_queued) {
+        applyLocalStockSale(payload.lignes);
+      }
+
+      // Fermer tout de suite : l’impression ne doit pas retarder la caisse.
+      onSuccess();
+
+      const receiptLines = cart.map((line) => {
+        const unit = unitPrice(line);
+        return {
+          nom: line.product.nom,
+          qty: line.qty,
+          unit,
+          total: unit * line.qty,
+        };
+      });
+      const cashReceived = isCash ? paidAmount : null;
+      const changeDue = isCash ? changeAmount : null;
+
+      void (async () => {
+        try {
+          const printer = await window.teka.getPrinterSettings();
+          if (!printer.autoPrintAfterSale) return;
           await window.teka.printSaleReceipt({
             locale,
             currency: currency ?? sale.devise_principale ?? null,
             companyName: companyName ?? null,
             branchName: branchName ?? null,
             sale,
-            lines: cart.map((line) => {
-              const unit = unitPrice(line);
-              return {
-                nom: line.product.nom,
-                qty: line.qty,
-                unit,
-                total: unit * line.qty,
-              };
-            }),
-            cashReceived: isCash ? paidAmount : null,
-            changeDue: isCash ? changeAmount : null,
+            lines: receiptLines,
+            cashReceived,
+            changeDue,
           });
+        } catch {
+          // Imprimante indisponible / timeout — vente déjà enregistrée.
         }
-      } catch {
-        // Imprimante indisponible / timeout — vente déjà enregistrée.
-      }
-
-      onSuccess();
+      })();
     } catch (err) {
       setSubmitError(friendlyNetworkError(locale, err, "saleSubmitError"));
       setSubmitting(false);
