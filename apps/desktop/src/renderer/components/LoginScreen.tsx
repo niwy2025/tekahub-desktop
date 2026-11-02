@@ -174,6 +174,20 @@ export function LoginScreen({
           <button type="submit" disabled={busy || !apiConfigured} style={primaryBtn}>
             {busy ? t(locale, "signingIn") : t(locale, "signIn")}
           </button>
+
+          {apiBaseUrl ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                color: "var(--tek-ash)",
+                textAlign: "center",
+                wordBreak: "break-all",
+              }}
+            >
+              {apiBaseUrl}
+            </p>
+          ) : null}
         </form>
 
         {profiles.length > 0 ? (
