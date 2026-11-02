@@ -30,6 +30,7 @@ import {
   type ShellUpdateState,
   type DailyReport,
   type DailyReportQuery,
+  type EnterpriseExchangeRatesResponse,
   type FlushOfflineQueueResult,
   type OfflineQueueState,
 } from "@teka/shared";
@@ -115,6 +116,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.flushOfflineQueue),
   getDailyReport: (query?: DailyReportQuery): Promise<DailyReport> =>
     ipcRenderer.invoke(IpcChannels.getDailyReport, query),
+  getEnterpriseExchangeRates: (): Promise<EnterpriseExchangeRatesResponse> =>
+    ipcRenderer.invoke(IpcChannels.getEnterpriseExchangeRates),
   onSessionExpired: (cb: () => void): (() => void) => {
     const listener = (): void => cb();
     ipcRenderer.on(IpcChannels.onSessionExpired, listener);

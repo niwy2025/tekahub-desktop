@@ -107,6 +107,7 @@ export const IpcChannels = {
   getOfflineQueueState: "teka:get-offline-queue-state",
   flushOfflineQueue: "teka:flush-offline-queue",
   getDailyReport: "teka:get-daily-report",
+  getEnterpriseExchangeRates: "teka:get-enterprise-exchange-rates",
   onSessionExpired: "teka:on-session-expired",
   onOfflineQueueChanged: "teka:on-offline-queue-changed",
 } as const;
@@ -259,11 +260,19 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
   "autre",
 ];
 
+export type SalePaymentEncaissement = {
+  devise_paiement: string;
+  montant_recu_devise: number;
+};
+
 export type RecordSalePaymentPayload = {
   saleId: string;
-  montant: number;
+  /** Montant en devise principale ; omis si devise_paiement + montant_recu_devise. */
+  montant?: number;
   moyen_paiement?: PaymentMethod | string | null;
   notes?: string | null;
+  devise_paiement?: string | null;
+  montant_recu_devise?: number | null;
 };
 
 export type SaleLinePayload = {
@@ -280,7 +289,26 @@ export type CreateSalePayload = {
   moyen_paiement: PaymentMethod | string;
   statut: string;
   montant_paye_initial?: number;
+  date_echeance?: string | null;
+  devise_paiement?: string | null;
+  montant_recu_devise?: number | null;
+  /** Plusieurs encaissements (ex. partie USD + partie CDF) résolus côté API. */
+  encaissements?: SalePaymentEncaissement[] | null;
   lignes: SaleLinePayload[];
+};
+
+export type EnterpriseExchangeRate = {
+  id?: string;
+  devise: string;
+  taux: number;
+  actif: boolean;
+};
+
+export type EnterpriseExchangeRatesResponse = {
+  enabled: boolean;
+  devise_principale: string;
+  supported_currencies: string[];
+  rates: EnterpriseExchangeRate[];
 };
 
 /** Vente enregistrée localement en attendant sync/push. */
@@ -384,6 +412,27 @@ export type SaleItem = {
   produit?: { id?: string; nom?: string | null } | null;
 };
 
+export type SalePaymentMeta = {
+  moyen_paiement?: string | null;
+  devise_paiement?: string | null;
+  montant_recu_devise?: number | string | null;
+  montant_applique?: number | string | null;
+  taux_applique?: number | string | null;
+  monnaie_principale?: number | string | null;
+  [key: string]: unknown;
+};
+
+export type SalePayment = {
+  id?: string;
+  reference?: string | null;
+  montant?: number | string | null;
+  date_paiement?: string | null;
+  statut?: string | null;
+  notes?: string | null;
+  meta?: SalePaymentMeta | null;
+  createdBy?: { id?: string; name?: string | null; prenom?: string | null } | null;
+};
+
 export type Sale = {
   id: string;
   reference?: string | null;
@@ -396,6 +445,8 @@ export type Sale = {
   client_nom?: string | null;
   client_telephone?: string | null;
   devise_principale?: string | null;
+  equivalents?: Array<{ devise: string; taux: number; montant: number }> | null;
+  paiements?: SalePayment[] | null;
   items?: SaleItem[] | null;
   /** true si la vente est en file locale (sync/push en attente). */
   offline_queued?: boolean;

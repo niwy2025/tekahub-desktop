@@ -93,15 +93,30 @@ export async function getSaleDetail(saleId: string): Promise<Sale> {
 
 /** Encaisser un complément sur une vente partielle. */
 export async function recordSalePayment(payload: RecordSalePaymentPayload): Promise<Sale> {
+  const hasFx =
+    Boolean(payload.devise_paiement?.trim()) ||
+    (payload.montant_recu_devise != null && Number(payload.montant_recu_devise) > 0);
+
+  const body: Record<string, unknown> = {
+    moyen_paiement: payload.moyen_paiement ?? "especes",
+    notes: payload.notes ?? undefined,
+  };
+
+  if (hasFx) {
+    body.devise_paiement = payload.devise_paiement?.trim() || undefined;
+    body.montant_recu_devise = payload.montant_recu_devise;
+    if (payload.montant != null && Number.isFinite(payload.montant) && payload.montant > 0) {
+      body.montant = payload.montant;
+    }
+  } else {
+    body.montant = payload.montant;
+  }
+
   const data = await apiRequest<Sale | { data?: Sale }>(
     `/api/ventes/${payload.saleId}/paiements`,
     {
       method: "POST",
-      body: {
-        montant: payload.montant,
-        moyen_paiement: payload.moyen_paiement ?? "especes",
-        notes: payload.notes ?? undefined,
-      },
+      body,
     },
   );
 

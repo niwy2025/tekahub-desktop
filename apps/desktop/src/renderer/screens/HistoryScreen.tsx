@@ -10,6 +10,7 @@ import {
 import {
   PAYMENT_METHODS,
   type AppLocale,
+  type EnterpriseExchangeRate,
   type PaymentMethod,
   type Sale,
   type SaleHistoryGroup,
@@ -22,6 +23,11 @@ import {
 import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { formatPrice } from "../hooks/useProducts";
 import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
+import {
+  formatExchangeRateHint,
+  roundMoney,
+  toMainAmount,
+} from "../lib/currencyExchange";
 
 const PAYMENT_LABEL_KEY: Record<PaymentMethod, MessageKey> = {
   especes: "salePayEspeces",
@@ -179,6 +185,44 @@ export function HistoryScreen({
   const [payMsg, setPayMsg] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("especes");
+  const [payCurrency, setPayCurrency] = useState("CDF");
+  const [exchangeEnabled, setExchangeEnabled] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState<EnterpriseExchangeRate[]>([]);
+
+  const mainCurrency = (currency ?? "CDF").trim().toUpperCase() || "CDF";
+  const fxActive = Boolean(exchangeEnabled && exchangeRates.length > 0);
+  const payCurrencyOptions = fxActive
+    ? [
+        mainCurrency,
+        ...exchangeRates
+          .map((rate) => rate.devise.trim().toUpperCase())
+          .filter((code) => code && code !== mainCurrency),
+      ].filter((code, index, arr) => arr.indexOf(code) === index)
+    : [mainCurrency];
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (typeof window.teka?.getEnterpriseExchangeRates !== "function") return;
+        const res = await window.teka.getEnterpriseExchangeRates();
+        if (cancelled) return;
+        setExchangeEnabled(Boolean(res.enabled));
+        setExchangeRates(Array.isArray(res.rates) ? res.rates : []);
+        const principal =
+          (res.devise_principale || currency || "CDF").trim().toUpperCase() || "CDF";
+        setPayCurrency(principal);
+      } catch {
+        if (!cancelled) {
+          setExchangeEnabled(false);
+          setExchangeRates([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -356,7 +400,15 @@ export function HistoryScreen({
       setPayMsg(t(locale, "historyPayInvalid"));
       return;
     }
-    if (amount > remaining + 0.0001) {
+
+    const useFx = fxActive && payCurrency !== mainCurrency;
+    if (useFx) {
+      const principal = toMainAmount(amount, payCurrency, mainCurrency, exchangeRates);
+      if (principal <= 0) {
+        setPayMsg(t(locale, "historyPayInvalid"));
+        return;
+      }
+    } else if (amount > remaining + 0.0001) {
       setPayMsg(t(locale, "historyPayTooHigh").replace("{max}", String(remaining)));
       return;
     }
@@ -364,16 +416,26 @@ export function HistoryScreen({
     setPayBusy(true);
     setPayMsg(null);
     try {
-      const updated = await window.teka.recordSalePayment({
-        saleId: detail.id,
-        montant: amount,
-        moyen_paiement: payMethod,
-      });
+      const updated = await window.teka.recordSalePayment(
+        useFx
+          ? {
+              saleId: detail.id,
+              moyen_paiement: payMethod,
+              devise_paiement: payCurrency,
+              montant_recu_devise: amount,
+            }
+          : {
+              saleId: detail.id,
+              montant: amount,
+              moyen_paiement: payMethod,
+            },
+      );
       setDetail({ ...detail, ...updated });
       setPayOpen(false);
       setPayMsg(t(locale, "historyPayOk"));
       const nextRemaining = remainingOf({ ...detail, ...updated });
       setPayAmount(nextRemaining > 0 ? String(nextRemaining) : "");
+      setPayCurrency(mainCurrency);
       void load();
     } catch (err) {
       setPayMsg(friendlyNetworkError(locale, err, "historyPayError"));
@@ -639,8 +701,13 @@ export function HistoryScreen({
           payMsg={payMsg}
           payAmount={payAmount}
           payMethod={payMethod}
+          payCurrency={payCurrency}
+          payCurrencyOptions={payCurrencyOptions}
+          exchangeEnabled={fxActive}
+          exchangeRates={exchangeRates}
           onPayAmountChange={setPayAmount}
           onPayMethodChange={setPayMethod}
+          onPayCurrencyChange={setPayCurrency}
           onClose={closeDetail}
           onPrint={() => void reprint()}
           onAskCancel={() => {
@@ -658,6 +725,7 @@ export function HistoryScreen({
             const rem = remainingOf(detail);
             setPayAmount(rem > 0 ? String(rem) : "");
             setPayMethod("especes");
+            setPayCurrency(mainCurrency);
           }}
           onAbortPay={() => {
             setPayOpen(false);
@@ -688,8 +756,13 @@ function SaleDetailModal({
   payMsg,
   payAmount,
   payMethod,
+  payCurrency,
+  payCurrencyOptions,
+  exchangeEnabled,
+  exchangeRates,
   onPayAmountChange,
   onPayMethodChange,
+  onPayCurrencyChange,
   onClose,
   onPrint,
   onAskCancel,
@@ -716,8 +789,13 @@ function SaleDetailModal({
   payMsg: string | null;
   payAmount: string;
   payMethod: PaymentMethod;
+  payCurrency: string;
+  payCurrencyOptions: string[];
+  exchangeEnabled: boolean;
+  exchangeRates: EnterpriseExchangeRate[];
   onPayAmountChange: (value: string) => void;
   onPayMethodChange: (value: PaymentMethod) => void;
+  onPayCurrencyChange: (value: string) => void;
   onClose: () => void;
   onPrint: () => void;
   onAskCancel: () => void;
@@ -750,12 +828,25 @@ function SaleDetailModal({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose, cancelConfirm, cancelBusy, onAbortCancel, payOpen, payBusy, onAbortPay]);
 
-  const cur = currency ?? sale?.devise_principale ?? null;
+  const cur =
+    (currency ?? sale?.devise_principale ?? "CDF").trim().toUpperCase() || "CDF";
   const canCancel = Boolean(
     allowCancel && sale && isValidated(sale.statut) && !isCancelled(sale.statut),
   );
   const canPay = Boolean(sale && canCollectRemaining(sale));
   const remaining = sale ? remainingOf(sale) : 0;
+  const payPreviewPrincipal =
+    exchangeEnabled && payCurrency !== cur
+      ? toMainAmount(
+          roundMoney(Number(payAmount.replace(",", ".")) || 0),
+          payCurrency,
+          cur,
+          exchangeRates,
+        )
+      : roundMoney(Number(payAmount.replace(",", ".")) || 0);
+  const payRate = exchangeRates.find(
+    (rate) => rate.devise.trim().toUpperCase() === payCurrency,
+  );
 
   return (
     <div role="presentation" style={backdrop} onClick={onClose}>
@@ -869,6 +960,112 @@ function SaleDetailModal({
               >
                 <span>{t(locale, "historyRemaining")}</span>
                 <strong style={{ fontSize: 18 }}>{formatPrice(remaining, locale, cur)}</strong>
+              </div>
+            ) : null}
+
+            {sale.paiements && sale.paiements.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>
+                  {t(locale, "historyPayments")}
+                </h3>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {sale.paiements.map((payment, index) => {
+                    const meta = payment.meta ?? {};
+                    const paymentCurrency =
+                      typeof meta.devise_paiement === "string" && meta.devise_paiement
+                        ? meta.devise_paiement
+                        : cur;
+                    const receivedForeign = meta.montant_recu_devise;
+                    const appliedMain = meta.montant_applique ?? payment.montant;
+                    const rateApplied = Number(meta.taux_applique ?? 0);
+                    const changeMain = Number(meta.monnaie_principale ?? 0);
+                    const isFx =
+                      Boolean(paymentCurrency) &&
+                      paymentCurrency !== cur &&
+                      receivedForeign != null;
+                    return (
+                      <div
+                        key={payment.id ?? `pay-${index}`}
+                        style={{
+                          border: "1px solid var(--tek-line)",
+                          borderRadius: 12,
+                          background: "var(--tek-bg)",
+                          padding: 12,
+                          fontSize: 13,
+                        }}
+                      >
+                        <div style={{ fontWeight: 650 }}>
+                          {payment.reference || `#${index + 1}`}
+                          {typeof meta.moyen_paiement === "string" ? (
+                            <span style={{ fontWeight: 500, color: "var(--tek-ash)" }}>
+                              {" · "}
+                              {paymentLabel(locale, meta.moyen_paiement)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div style={{ marginTop: 4, color: "var(--tek-ash)", fontSize: 12 }}>
+                          {formatDateTime(locale, payment.date_paiement)}
+                        </div>
+                        {(isFx || receivedForeign != null) && (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              padding: "8px 10px",
+                              borderRadius: 8,
+                              border: "1px solid var(--tek-line)",
+                              background: "var(--tek-card)",
+                              display: "grid",
+                              gap: 4,
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 650,
+                                color: "var(--tek-ash)",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.08em",
+                              }}
+                            >
+                              {t(locale, "historyPaymentBreakdown")}
+                            </div>
+                            {receivedForeign != null ? (
+                              <div>
+                                {t(locale, "historyPaymentReceived")}:{" "}
+                                <strong>
+                                  {formatPrice(receivedForeign, locale, paymentCurrency)}
+                                </strong>
+                              </div>
+                            ) : null}
+                            {isFx && rateApplied > 0 ? (
+                              <div>
+                                {t(locale, "historyPaymentRate")}:{" "}
+                                <strong>
+                                  1 {paymentCurrency} = {rateApplied} {cur}
+                                </strong>
+                              </div>
+                            ) : null}
+                            <div>
+                              {t(locale, "historyPaymentApplied")}:{" "}
+                              <strong>{formatPrice(appliedMain, locale, cur)}</strong>
+                            </div>
+                            {changeMain > 0.005 ? (
+                              <div>
+                                {t(locale, "historyPaymentChange")}:{" "}
+                                <strong>{formatPrice(changeMain, locale, cur)}</strong>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                        {!isFx && receivedForeign == null ? (
+                          <div style={{ marginTop: 6, fontWeight: 700 }}>
+                            {formatPrice(payment.montant, locale, cur)}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
 
@@ -987,6 +1184,40 @@ function SaleDetailModal({
                     </button>
                   ))}
                 </div>
+                {exchangeEnabled ? (
+                  <label
+                    style={{
+                      display: "grid",
+                      gap: 6,
+                      marginTop: 12,
+                      fontSize: 12,
+                      fontWeight: 650,
+                      color: "var(--tek-ash)",
+                    }}
+                  >
+                    {t(locale, "historyPayCurrency")}
+                    <select
+                      value={payCurrency}
+                      disabled={payBusy}
+                      onChange={(e) => onPayCurrencyChange(e.target.value.toUpperCase())}
+                      style={{
+                        border: "1px solid var(--tek-line)",
+                        borderRadius: 12,
+                        padding: "12px 14px",
+                        fontSize: 15,
+                        fontWeight: 650,
+                        background: "var(--tek-bg)",
+                        color: "var(--tek-ink)",
+                      }}
+                    >
+                      {payCurrencyOptions.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label
                   style={{
                     display: "grid",
@@ -1022,6 +1253,19 @@ function SaleDetailModal({
                     }}
                   />
                 </label>
+                {exchangeEnabled && payCurrency !== cur && payRate ? (
+                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--tek-ash)" }}>
+                    {t(locale, "historyPayFxHint").replace("{main}", cur)}
+                    {" · "}
+                    {formatExchangeRateHint(cur, payCurrency, Number(payRate.taux))}
+                    {payPreviewPrincipal > 0 ? (
+                      <>
+                        {" · "}
+                        {formatPrice(payPreviewPrincipal, locale, cur)}
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
                 <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
                   <button
                     type="button"

@@ -8,7 +8,7 @@ import {
   type Ref,
   type RefObject,
 } from "react";
-import type { AppLocale, Product } from "@teka/shared";
+import type { AppLocale, EnterpriseExchangeRate, Product } from "@teka/shared";
 import { refreshCatalog } from "../catalog/productCatalogStore";
 import {
   availableStock,
@@ -65,6 +65,8 @@ export function PosScreen({
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [stockMsg, setStockMsg] = useState<string | null>(null);
+  const [exchangeEnabled, setExchangeEnabled] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState<EnterpriseExchangeRate[]>([]);
   const stockMsgTimer = useRef<number | null>(null);
   useAutoFocus(searchRef);
 
@@ -77,6 +79,27 @@ export function PosScreen({
   useEffect(() => {
     return () => {
       if (stockMsgTimer.current !== null) window.clearTimeout(stockMsgTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (typeof window.teka?.getEnterpriseExchangeRates !== "function") return;
+        const res = await window.teka.getEnterpriseExchangeRates();
+        if (cancelled) return;
+        setExchangeEnabled(Boolean(res.enabled));
+        setExchangeRates(Array.isArray(res.rates) ? res.rates : []);
+      } catch {
+        if (!cancelled) {
+          setExchangeEnabled(false);
+          setExchangeRates([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -639,6 +662,8 @@ export function PosScreen({
           currency={currency}
           companyName={companyName}
           branchName={branchName}
+          exchangeEnabled={exchangeEnabled}
+          exchangeRates={exchangeRates}
           cart={cart}
           onClose={() => {
             setSaleModalOpen(false);

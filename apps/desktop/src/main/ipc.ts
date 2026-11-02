@@ -17,6 +17,7 @@ import {
   type ConnectionSettingsView,
   type DailyReport,
   type DailyReportQuery,
+  type EnterpriseExchangeRatesResponse,
   type FlushOfflineQueueResult,
   type OfflineQueueState,
   type PrinterInfo,
@@ -38,6 +39,7 @@ import { ApiError, setUnauthorizedHandler } from "./api-client";
 import { listProducts, listSellableProducts } from "./catalog";
 import { createClient, listAllClients, updateClient } from "./clients";
 import { getDailyReport } from "./daily-report";
+import { getEnterpriseExchangeRates } from "./exchange-rates";
 import {
   flushOfflineQueue,
   getOfflineQueueState,
@@ -382,6 +384,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async (_e, query?: DailyReportQuery): Promise<DailyReport> => {
       try {
         return await getDailyReport(query ?? {});
+      } catch (err) {
+        throw toIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.getEnterpriseExchangeRates,
+    async (): Promise<EnterpriseExchangeRatesResponse> => {
+      try {
+        return await getEnterpriseExchangeRates();
       } catch (err) {
         throw toIpcError(err);
       }

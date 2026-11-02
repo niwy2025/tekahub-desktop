@@ -7,7 +7,13 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import type { AppLocale, CreateSalePayload, PaymentMethod } from "@teka/shared";
+import type {
+  AppLocale,
+  CreateSalePayload,
+  EnterpriseExchangeRate,
+  PaymentMethod,
+  SalePaymentEncaissement,
+} from "@teka/shared";
 import { PAYMENT_METHODS } from "@teka/shared";
 import {
   findClientByPhone,
@@ -19,9 +25,20 @@ import { applyLocalStockSale } from "../catalog/productCatalogStore";
 import { formatPrice } from "../hooks/useProducts";
 import { useFocusTrap } from "../keyboard/useFocusTrap";
 import { friendlyNetworkError, t, type MessageKey } from "../i18n/messages";
+import {
+  formatExchangeRateHint,
+  roundMoney,
+  toMainAmount,
+} from "../lib/currencyExchange";
 import type { CartLine } from "./CartPanel";
 
 type ClientStatus = "idle" | "checking" | "found" | "new" | "error";
+
+type TenderLine = {
+  key: string;
+  devise: string;
+  amount: string;
+};
 
 const PAYMENT_LABEL_KEY: Record<PaymentMethod, MessageKey> = {
   especes: "salePayEspeces",
@@ -36,6 +53,8 @@ type Props = {
   currency?: string | null;
   companyName?: string | null;
   branchName?: string | null;
+  exchangeEnabled?: boolean;
+  exchangeRates?: EnterpriseExchangeRate[];
   cart: CartLine[];
   onClose: () => void;
   onSuccess: () => void;
@@ -85,6 +104,8 @@ export function SaleValidateModal({
   currency,
   companyName,
   branchName,
+  exchangeEnabled = false,
+  exchangeRates = [],
   cart,
   onClose,
   onSuccess,
@@ -102,6 +123,17 @@ export function SaleValidateModal({
     getClientsSnapshot,
   );
 
+  const mainCurrency = (currency ?? "CDF").trim().toUpperCase() || "CDF";
+  const fxActive = Boolean(exchangeEnabled && exchangeRates.length > 0);
+  const currencyOptions = fxActive
+    ? [
+        mainCurrency,
+        ...exchangeRates
+          .map((rate) => rate.devise.trim().toUpperCase())
+          .filter((code) => code && code !== mainCurrency),
+      ].filter((code, index, arr) => arr.indexOf(code) === index)
+    : [mainCurrency];
+
   const [phoneLocal, setPhoneLocal] = useState("");
   const [name, setName] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -110,6 +142,7 @@ export function SaleValidateModal({
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("especes");
   const [paidInput, setPaidInput] = useState("");
+  const [tenderLines, setTenderLines] = useState<TenderLine[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -120,13 +153,34 @@ export function SaleValidateModal({
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
   const fullPhone = toFullPhone(phoneLocal);
   const isCash = paymentMethod === "especes";
-  const paidAmount = isCash ? parseAmount(paidInput) : total;
-  const changeAmount = isCash
-    ? Math.max(0, Math.round((paidAmount - total) * 100) / 100)
-    : 0;
-  const remainingAmount = isCash
-    ? Math.max(0, Math.round((total - paidAmount) * 100) / 100)
-    : 0;
+
+  const linePreviews = tenderLines.map((line) => {
+    const amountValue = parseAmount(line.amount);
+    const principal = toMainAmount(amountValue, line.devise, mainCurrency, exchangeRates);
+    return { ...line, amountValue, principal };
+  });
+  const fxReceivedPrincipal = roundMoney(
+    linePreviews.reduce((sum, line) => sum + line.principal, 0),
+  );
+  const fxAppliedPrincipal = Math.min(fxReceivedPrincipal, total);
+  const fxRemaining = Math.max(0, roundMoney(total - fxAppliedPrincipal));
+  const fxChange = Math.max(0, roundMoney(fxReceivedPrincipal - fxAppliedPrincipal));
+
+  const paidAmount = fxActive
+    ? fxReceivedPrincipal
+    : isCash
+      ? parseAmount(paidInput)
+      : total;
+  const changeAmount = fxActive
+    ? fxChange
+    : isCash
+      ? Math.max(0, Math.round((paidAmount - total) * 100) / 100)
+      : 0;
+  const remainingAmount = fxActive
+    ? fxRemaining
+    : isCash
+      ? Math.max(0, Math.round((total - paidAmount) * 100) / 100)
+      : 0;
 
   useEffect(() => {
     phoneRef.current?.focus();
@@ -233,14 +287,63 @@ export function SaleValidateModal({
     setSubmitError(null);
     setPaymentMethod("especes");
     setPaidInput(formatAmountInput(total));
+    setTenderLines([
+      {
+        key: `line-${Date.now()}`,
+        devise: mainCurrency,
+        amount: total > 0 ? formatAmountInput(total) : "",
+      },
+    ]);
     setPaymentOpen(true);
+  }
+
+  function updateTenderLine(key: string, patch: Partial<TenderLine>) {
+    setTenderLines((prev) =>
+      prev.map((line) => (line.key === key ? { ...line, ...patch } : line)),
+    );
+    setSubmitError(null);
+  }
+
+  function addTenderLine() {
+    if (!fxActive || tenderLines.length >= 5) return;
+    const next =
+      currencyOptions.find((code) => !tenderLines.some((line) => line.devise === code)) ??
+      mainCurrency;
+    setTenderLines((prev) => [
+      ...prev,
+      { key: `line-${Date.now()}-${prev.length}`, devise: next, amount: "" },
+    ]);
+  }
+
+  function removeTenderLine(key: string) {
+    setTenderLines((prev) => (prev.length <= 1 ? prev : prev.filter((line) => line.key !== key)));
+    setSubmitError(null);
   }
 
   async function submitSale(e?: FormEvent) {
     e?.preventDefault();
     if (submitting || cart.length === 0) return;
 
-    if (isCash && paidAmount + 0.0001 < total) {
+    let encaissements: SalePaymentEncaissement[] | null = null;
+
+    if (fxActive) {
+      encaissements = linePreviews
+        .filter((line) => line.amountValue > 0)
+        .map((line) => ({
+          devise_paiement: line.devise,
+          montant_recu_devise: line.amountValue,
+        }));
+      if (!encaissements.length) {
+        setSubmitError(t(locale, "saleFxAmountRequired"));
+        paidRef.current?.focus();
+        return;
+      }
+      if (fxRemaining > 0.005) {
+        setSubmitError(t(locale, "salePaidTooLow"));
+        paidRef.current?.focus();
+        return;
+      }
+    } else if (isCash && paidAmount + 0.0001 < total) {
       setSubmitError(t(locale, "salePaidTooLow"));
       paidRef.current?.focus();
       return;
@@ -254,16 +357,22 @@ export function SaleValidateModal({
 
     // L’API refuse montant_paye_initial > total.
     // Espèces : monnaie locale caissier. Autres moyens : payé = total.
+    // Multi-devises : encaissements[] résolus côté serveur.
     const payload: CreateSalePayload = {
       moyen_paiement: paymentMethod,
       statut: "validee",
-      montant_paye_initial: Math.min(isCash ? paidAmount : total, total),
       lignes: cart.map((line) => ({
         produit_id: line.product.id,
         quantite: line.qty,
         prix_unitaire: unitPrice(line) || undefined,
       })),
     };
+
+    if (encaissements) {
+      payload.encaissements = encaissements;
+    } else {
+      payload.montant_paye_initial = Math.min(isCash ? paidAmount : total, total);
+    }
 
     if (clientId || telephone || nom) {
       payload.client_id = clientId;
@@ -303,8 +412,8 @@ export function SaleValidateModal({
           total: unit * line.qty,
         };
       });
-      const cashReceived = isCash ? paidAmount : null;
-      const changeDue = isCash ? changeAmount : null;
+      const cashReceived = fxActive || isCash ? paidAmount : null;
+      const changeDue = fxActive || isCash ? changeAmount : null;
 
       void (async () => {
         try {
@@ -574,11 +683,145 @@ export function SaleValidateModal({
                   {t(locale, "posCartTotal")}
                 </span>
                 <strong style={{ fontSize: 22 }}>
-                  {formatPrice(total, locale, currency)}
+                  {formatPrice(total, locale, mainCurrency)}
                 </strong>
               </div>
 
-              {isCash ? (
+              {fxActive ? (
+                <>
+                  <p style={payHint}>{t(locale, "saleFxHint")}</p>
+                  <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                    {linePreviews.map((line, index) => {
+                      const rate = exchangeRates.find(
+                        (item) => item.devise.trim().toUpperCase() === line.devise,
+                      );
+                      return (
+                        <div key={line.key} style={fxLineBox}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              alignItems: "center",
+                            }}
+                          >
+                            <span style={{ fontSize: 11, fontWeight: 650, color: "var(--tek-ash)" }}>
+                              {t(locale, "saleFxCurrency")} {index + 1}
+                            </span>
+                            {tenderLines.length > 1 ? (
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => removeTenderLine(line.key)}
+                                style={linkBtn}
+                              >
+                                {t(locale, "saleFxRemoveLine")}
+                              </button>
+                            ) : null}
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 8 }}>
+                            <label style={{ ...payLabel, marginTop: 0 }}>
+                              {t(locale, "saleFxCurrency")}
+                              <select
+                                value={line.devise}
+                                disabled={submitting}
+                                onChange={(e) =>
+                                  updateTenderLine(line.key, {
+                                    devise: e.target.value.toUpperCase(),
+                                  })
+                                }
+                                style={{ ...payInput, fontSize: 14, padding: "10px 12px" }}
+                              >
+                                {currencyOptions.map((code) => (
+                                  <option key={code} value={code}>
+                                    {code}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label style={{ ...payLabel, marginTop: 0 }}>
+                              {t(locale, "saleFxAmount")}
+                              <input
+                                ref={index === 0 ? paidRef : undefined}
+                                type="text"
+                                inputMode="decimal"
+                                value={line.amount}
+                                disabled={submitting}
+                                onChange={(e) =>
+                                  updateTenderLine(line.key, { amount: e.target.value })
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void submitSale();
+                                  }
+                                }}
+                                style={payInput}
+                              />
+                            </label>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              fontSize: 12,
+                              color: "var(--tek-ash)",
+                            }}
+                          >
+                            <span>
+                              {t(locale, "saleFxConverted")}:{" "}
+                              <strong style={{ color: "var(--tek-ink)" }}>
+                                {formatPrice(line.principal, locale, mainCurrency)}
+                              </strong>
+                            </span>
+                            {rate && line.devise !== mainCurrency ? (
+                              <span>
+                                {t(locale, "saleFxRate")}:{" "}
+                                {formatExchangeRateHint(mainCurrency, line.devise, Number(rate.taux))}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {tenderLines.length < 5 ? (
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={addTenderLine}
+                      style={{ ...linkBtn, marginTop: 10 }}
+                    >
+                      {t(locale, "saleFxAddCurrency")}
+                    </button>
+                  ) : null}
+                  <div style={{ ...payTotalBox, marginTop: 12 }}>
+                    <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
+                      {t(locale, "saleFxReceivedTotal")}
+                    </span>
+                    <strong>{formatPrice(fxReceivedPrincipal, locale, mainCurrency)}</strong>
+                  </div>
+                  <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
+                    {changeAmount > 0 ? (
+                      <>
+                        <span>{t(locale, "saleChangeLabel")}</span>
+                        <strong>{formatPrice(changeAmount, locale, mainCurrency)}</strong>
+                      </>
+                    ) : remainingAmount > 0.005 ? (
+                      <>
+                        <span>{t(locale, "saleRemainingLabel")}</span>
+                        <strong>{formatPrice(remainingAmount, locale, mainCurrency)}</strong>
+                      </>
+                    ) : (
+                      <>
+                        <span>{t(locale, "saleChangeLabel")}</span>
+                        <strong>{formatPrice(0, locale, mainCurrency)}</strong>
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : isCash ? (
                 <>
                   <label style={payLabel}>
                     {t(locale, "salePaidLabel")}
@@ -647,7 +890,7 @@ export function SaleValidateModal({
                 >
                   {submitting
                     ? t(locale, "saleSubmitting")
-                    : t(locale, isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
+                    : t(locale, fxActive || isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
                 </button>
                 <button
                   type="button"
@@ -915,12 +1158,23 @@ const payBackdrop: CSSProperties = {
 };
 
 const payDialog: CSSProperties = {
-  width: "min(380px, 100%)",
+  width: "min(440px, 100%)",
+  maxHeight: "min(85vh, 720px)",
+  overflow: "auto",
   background: "var(--tek-card)",
   borderRadius: 16,
   border: "1px solid var(--tek-line)",
   boxShadow: "var(--tek-shadow)",
   padding: 20,
+};
+
+const fxLineBox: CSSProperties = {
+  border: "1px solid var(--tek-line)",
+  borderRadius: 12,
+  background: "var(--tek-bg)",
+  padding: 12,
+  display: "grid",
+  gap: 8,
 };
 
 const payMethodRow: CSSProperties = {
