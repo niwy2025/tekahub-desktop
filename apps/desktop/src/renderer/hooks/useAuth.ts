@@ -3,6 +3,7 @@ import type {
   AppLocale,
   AuthSelectableProfile,
   AuthUser,
+  ConnectionSettingsView,
   SessionInfo,
 } from "@teka/shared";
 import { clearClients, ensureClientsLoaded } from "../catalog/clientCatalogStore";
@@ -111,6 +112,18 @@ export function useAuth() {
     setLocaleState(normalizeLocale(nextLocale.locale));
   }, []);
 
+  /** Applique tout de suite l’URL serveur après Enregistrer (sans rebuild / redémarrage). */
+  const applyConnectionSettings = useCallback(async (view?: ConnectionSettingsView) => {
+    if (view?.effectiveApiBaseUrl) {
+      setSession((prev) => ({
+        authenticated: prev?.authenticated ?? false,
+        apiConfigured: true,
+        apiBaseUrl: view.effectiveApiBaseUrl,
+      }));
+    }
+    await refreshSession();
+  }, [refreshSession]);
+
   return {
     booting,
     user,
@@ -122,6 +135,7 @@ export function useAuth() {
     login,
     logout,
     refreshSession,
+    applyConnectionSettings,
     clearProfiles: () => setProfiles([]),
   };
 }

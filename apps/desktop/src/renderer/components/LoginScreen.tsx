@@ -7,7 +7,11 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import type { AppLocale, AuthSelectableProfile, ConnectionSettingsView } from "@teka/shared";
+import type {
+  AppLocale,
+  AuthSelectableProfile,
+  ConnectionSettingsView,
+} from "@teka/shared";
 import logo from "../assets/teka-hub-logo.svg";
 import { useAutoFocus } from "../keyboard/useAutoFocus";
 import { friendlyLoginError, t } from "../i18n/messages";
@@ -18,7 +22,7 @@ type Props = {
   onLocaleChange: (locale: AppLocale) => void;
   apiConfigured: boolean;
   apiBaseUrl: string | null;
-  onConnectionSaved: () => Promise<void>;
+  onConnectionSaved: (view?: ConnectionSettingsView) => Promise<void>;
   onLogin: (
     loginId: string,
     password: string,
@@ -271,9 +275,7 @@ export function LoginScreen({
           locale={locale}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setSettingsOpen(false)}
-          onSaved={async () => {
-            await onConnectionSaved();
-          }}
+          onSaved={onConnectionSaved}
         />
       ) : null}
     </div>
@@ -289,11 +291,10 @@ function ConnectionSettingsModal({
   locale: AppLocale;
   apiBaseUrl: string | null;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (view: ConnectionSettingsView) => Promise<void>;
 }) {
   const titleId = useId();
   const [apiDraft, setApiDraft] = useState(apiBaseUrl ?? "");
-  const [connection, setConnection] = useState<ConnectionSettingsView | null>(null);
   const [savingApi, setSavingApi] = useState(false);
   const [apiSavedMsg, setApiSavedMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -308,7 +309,6 @@ function ConnectionSettingsModal({
     void window.teka
       .getConnectionSettings()
       .then((next) => {
-        setConnection(next);
         setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
       })
       .catch(() => {
@@ -331,10 +331,10 @@ function ConnectionSettingsModal({
     setError(null);
     try {
       const next = await window.teka.setConnectionSettings({ apiBaseUrl: apiDraft.trim() });
-      setConnection(next);
       setApiDraft(next.apiBaseUrl ?? next.effectiveApiBaseUrl);
       setApiSavedMsg(t(locale, "connectionSaved"));
-      await onSaved();
+      // Prend effet immédiatement pour le prochain login — pas de rebuild.
+      await onSaved(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

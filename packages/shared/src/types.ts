@@ -508,11 +508,11 @@ export type ConnectionSettings = {
 
 /** Vue connexion pour l’UI (valeur effective + métadonnées). */
 export type ConnectionSettingsView = ConnectionSettings & {
-  /** URL réellement utilisée par le shell (env > fichier > défaut). */
+  /** URL réellement utilisée par le shell (fichier > env > défaut). */
   effectiveApiBaseUrl: string;
   /** URL proposée par défaut si rien n’est enregistré. */
   defaultApiBaseUrl: string;
-  /** true si API_BASE_URL vient de l’environnement (.env) et prime sur le fichier. */
+  /** Historique : l’UI n’est plus verrouillée par l’environnement. */
   fromEnv: boolean;
 };
 

@@ -39,6 +39,7 @@ export function App() {
     login,
     logout,
     refreshSession,
+    applyConnectionSettings,
     clearProfiles,
   } = useAuth();
   // Toujours écouter l’updater (même avant login) pour afficher la bannière MAJ.
@@ -138,7 +139,7 @@ export function App() {
             onLocaleChange={(next) => void setLocale(next)}
             apiConfigured={session?.apiConfigured ?? false}
             apiBaseUrl={session?.apiBaseUrl ?? null}
-            onConnectionSaved={refreshSession}
+            onConnectionSaved={applyConnectionSettings}
             profiles={profiles}
             onClearProfiles={clearProfiles}
             onLogin={login}
