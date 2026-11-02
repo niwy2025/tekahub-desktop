@@ -15,21 +15,26 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            cmd: dist:linux
+            builder_args: --linux AppImage
           - os: windows-latest
-            cmd: dist:win
+            builder_args: --win nsis
           - os: macos-latest
-            cmd: dist:mac
+            builder_args: --mac dmg
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
       - run: npm ci
       - run: npm run build:shared
-      - name: Build & publish
+      - name: Build desktop
+        run: npm run build -w @teka/desktop
+      - name: Package & publish to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACKS_PUBLIC_KEY: ${{ secrets.PACKS_PUBLIC_KEY }}
-        run: npm run ${{ matrix.cmd }} -w @teka/desktop
+          EP_GH_IGNORE_TIME: "true"
+        run: npm exec -w @teka/desktop -- electron-builder ${{ matrix.builder_args }} --publish always
