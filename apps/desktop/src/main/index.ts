@@ -50,6 +50,12 @@ if (disableGpu) {
 app.setName("TekaHub");
 app.setPath("userData", join(app.getPath("appData"), "TekaHub"));
 
+/** Une seule instance : un 2ᵉ lancement focus la fenêtre existante. */
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 function getWindow() {
@@ -115,28 +121,40 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(async () => {
-  // Caisse POS : pas de barre Fichier/Édition/Affichage (menu Electron par défaut).
-  Menu.setApplicationMenu(null);
-
-  applyContentSecurityPolicy();
-  getAppPaths();
-  configureAutoUpdater(getWindow);
-  registerIpc(getWindow);
-  createWindow();
-
-  // Laisser la fenêtre / le réseau Windows démarrer avant le check MAJ.
-  setTimeout(() => {
-    void checkShellUpdates().then(() => {
-      void checkAndUpdatePack(appConfig.corePackId, getWindow);
-    });
-  }, 2500);
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (gotSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!mainWindow) {
+      createWindow();
+      return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
   });
-});
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+  app.whenReady().then(async () => {
+    // Caisse POS : pas de barre Fichier/Édition/Affichage (menu Electron par défaut).
+    Menu.setApplicationMenu(null);
+
+    applyContentSecurityPolicy();
+    getAppPaths();
+    configureAutoUpdater(getWindow);
+    registerIpc(getWindow);
+    createWindow();
+
+    // Laisser la fenêtre / le réseau Windows démarrer avant le check MAJ.
+    setTimeout(() => {
+      void checkShellUpdates().then(() => {
+        void checkAndUpdatePack(appConfig.corePackId, getWindow);
+      });
+    }, 2500);
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+}
