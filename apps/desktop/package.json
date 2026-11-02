@@ -60,7 +60,8 @@
       {
         "provider": "github",
         "owner": "niwy2025",
-        "repo": "tekahub-desktop"
+        "repo": "tekahub-desktop",
+        "releaseType": "release"
       }
     ],
     "linux": {
