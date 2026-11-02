@@ -351,19 +351,13 @@ function ConnectionSettingsModal({
               {t(locale, "connectionSection")}
             </h2>
             <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-              {t(locale, "connectionHint")}
+              {t(locale, envLocked ? "connectionEnvOverride" : "connectionHint")}
             </p>
           </div>
           <button type="button" onClick={onClose} style={iconCloseBtn} aria-label={t(locale, "connectionClose")}>
             ×
           </button>
         </div>
-
-        {envLocked ? (
-          <p style={{ margin: "14px 0 0", fontSize: 12, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-            {t(locale, "connectionEnvOverride")}
-          </p>
-        ) : null}
 
         <label style={{ display: "grid", gap: 6, marginTop: 16 }}>
           <span

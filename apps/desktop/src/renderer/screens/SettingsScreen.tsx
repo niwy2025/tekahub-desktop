@@ -175,7 +175,10 @@ function ConnectionPanel({ locale }: { locale: AppLocale }) {
   return (
     <Panel title={t(locale, "connectionSection")}>
       <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-        {t(locale, "connectionHint")}
+        {t(
+          locale,
+          view?.fromEnv ? "connectionEnvOverride" : "connectionHint",
+        )}
       </p>
 
       {loading || !view ? (
@@ -184,12 +187,6 @@ function ConnectionPanel({ locale }: { locale: AppLocale }) {
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {view.fromEnv ? (
-            <p style={{ margin: 0, fontSize: 12, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-              {t(locale, "connectionEnvOverride")}
-            </p>
-          ) : null}
-
           <label style={selectLabel}>
             {t(locale, "connectionApiUrl")}
             <input

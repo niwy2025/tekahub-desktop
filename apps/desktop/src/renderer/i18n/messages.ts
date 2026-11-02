@@ -17,15 +17,14 @@ export const messages = {
     apiMissingHint:
       "Ouvre les réglages (icône en bas à gauche) pour indiquer l’adresse du serveur, puis connecte-toi.",
     connectionSection: "Connexion serveur",
-    connectionHint:
-      "Adresse de l’API TekaHub. Enregistrée sur cet ordinateur (pas besoin de fichier .env).",
-    connectionApiUrl: "URL de l’API",
+    connectionHint: "Indiquez l’adresse du serveur TekaHub.",
+    connectionApiUrl: "Adresse du serveur",
     connectionApiPlaceholder: "https://api-tekahub.niwytech.cloud",
     connectionSave: "Enregistrer",
     connectionSaved: "Adresse serveur enregistrée",
     connectionLoadError: "Impossible de charger la connexion",
     connectionEnvOverride:
-      "Cette URL est forcée par l’environnement (.env). Le fichier local ne s’applique pas tant que API_BASE_URL est défini.",
+      "Cette adresse est gérée par l’administrateur et ne peut pas être modifiée ici.",
     connectionResetDefault: "Réinitialiser au défaut",
     connectionOpenSettings: "Réglages serveur",
     connectionClose: "Fermer",
@@ -381,15 +380,14 @@ export const messages = {
     apiMissingHint:
       "Open settings (gear icon bottom-left) to set the server address, then sign in.",
     connectionSection: "Server connection",
-    connectionHint:
-      "TekaHub API address. Saved on this computer (no .env file needed).",
-    connectionApiUrl: "API URL",
+    connectionHint: "Enter your TekaHub server address.",
+    connectionApiUrl: "Server address",
     connectionApiPlaceholder: "https://api-tekahub.niwytech.cloud",
     connectionSave: "Save",
     connectionSaved: "Server address saved",
     connectionLoadError: "Could not load connection settings",
     connectionEnvOverride:
-      "This URL is forced by the environment (.env). The local file is ignored while API_BASE_URL is set.",
+      "This address is managed by your administrator and can’t be changed here.",
     connectionResetDefault: "Reset to default",
     connectionOpenSettings: "Server settings",
     connectionClose: "Close",
