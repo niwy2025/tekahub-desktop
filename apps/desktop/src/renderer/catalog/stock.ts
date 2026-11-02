@@ -4,16 +4,19 @@ function truthyFlag(value: unknown): boolean {
   return value === true || value === 1 || value === "1";
 }
 
+export function isServiceProduct(product: Product): boolean {
+  return product.type === "service" || product.stock_source === "service";
+}
+
 /**
  * Stock max vendable pour un produit.
  * `null` = illimité (service / stock_illimite).
  */
 export function availableStock(product: Product): number | null {
   if (
+    isServiceProduct(product) ||
     truthyFlag(product.stock_illimite) ||
-    product.stock_source === "illimite" ||
-    product.stock_source === "service" ||
-    product.type === "service"
+    product.stock_source === "illimite"
   ) {
     return null;
   }

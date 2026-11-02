@@ -15,6 +15,7 @@ import {
   canSetQty,
   clampQty,
   formatStockLabel,
+  isServiceProduct,
 } from "../catalog/stock";
 import { CartPanel, type CartLine } from "../components/CartPanel";
 import { CartQtyDialog } from "../components/CartQtyDialog";
@@ -592,7 +593,9 @@ export function PosScreen({
                         {formatPrice(price, locale, currency)}
                       </div>
                       <div style={{ fontSize: 11, color: "var(--tek-ash)", marginTop: 2 }}>
-                        {t(locale, "stock")}: {formatStockLabel(product)}
+                        {isServiceProduct(product)
+                          ? t(locale, "productService")
+                          : `${t(locale, "stock")}: ${formatStockLabel(product)}`}
                       </div>
                     </div>
                   </button>

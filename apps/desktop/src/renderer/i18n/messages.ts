@@ -149,6 +149,7 @@ export const messages = {
     productsErrorRefused: "Connexion au serveur refusée ou interrompue. Réessayez.",
     productsErrorGeneric: "Impossible de charger les produits. Réessayez.",
     stock: "Stock",
+    productService: "Service",
     customersTitle: "Clients",
     customersHint: "Créer, modifier et consulter les clients — points fidélité inclus.",
     customersSearchPlaceholder: "Nom, téléphone, email…",
