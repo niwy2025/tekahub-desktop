@@ -111,7 +111,6 @@ export function SaleValidateModal({
   onSuccess,
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const payDialogRef = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -146,8 +145,7 @@ export function SaleValidateModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  useFocusTrap(dialogRef, !paymentOpen);
-  useFocusTrap(payDialogRef, paymentOpen);
+  useFocusTrap(dialogRef, true);
 
   const total = cart.reduce((sum, line) => sum + unitPrice(line) * line.qty, 0);
   const itemsCount = cart.reduce((sum, line) => sum + line.qty, 0);
@@ -453,21 +451,285 @@ export function SaleValidateModal({
       >
         <header style={header}>
           <div>
-            <p style={eyebrow}>{t(locale, "saleValidateEyebrow")}</p>
+            <p style={eyebrow}>
+              {paymentOpen
+                ? t(locale, "salePaymentMethod")
+                : t(locale, "saleValidateEyebrow")}
+            </p>
             <h2 id="sale-validate-title" style={{ margin: "4px 0 0", fontSize: 26 }}>
-              {t(locale, "saleValidateTitle")}
+              {paymentOpen ? t(locale, "salePaidTitle") : t(locale, "saleValidateTitle")}
             </h2>
           </div>
           <button
             type="button"
             disabled={submitting}
-            onClick={onClose}
+            onClick={() => {
+              if (paymentOpen) {
+                setPaymentOpen(false);
+                return;
+              }
+              onClose();
+            }}
             style={ghostBtn}
           >
             Esc
           </button>
         </header>
 
+        {paymentOpen ? (
+          <section style={{ ...panel, minHeight: 0 }}>
+            <div style={payMethodRow} role="group" aria-label={t(locale, "salePaymentMethod")}>
+              {PAYMENT_METHODS.map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setPaymentMethod(method);
+                    setSubmitError(null);
+                    if (method === "especes") {
+                      setPaidInput(formatAmountInput(total));
+                      if (fxActive) {
+                        setTenderLines([
+                          {
+                            key: `line-${Date.now()}`,
+                            devise: mainCurrency,
+                            amount: total > 0 ? formatAmountInput(total) : "",
+                          },
+                        ]);
+                      }
+                    }
+                  }}
+                  style={paymentMethod === method ? payChipActive : payChip}
+                >
+                  {t(locale, PAYMENT_LABEL_KEY[method])}
+                </button>
+              ))}
+            </div>
+
+            <div style={payTotalBox}>
+              <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
+                {t(locale, "posCartTotal")}
+              </span>
+              <strong style={{ fontSize: 22 }}>
+                {formatPrice(total, locale, mainCurrency)}
+              </strong>
+            </div>
+
+            {isCash ? (
+              <>
+                {useFxTender ? (
+                  <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                    {linePreviews.map((line, index) => {
+                      const rate = exchangeRates.find(
+                        (item) => item.devise.trim().toUpperCase() === line.devise,
+                      );
+                      const foreign = line.devise !== mainCurrency;
+                      return (
+                        <div key={line.key} style={tenderLines.length > 1 ? fxLineBox : undefined}>
+                          {tenderLines.length > 1 ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: 8,
+                                alignItems: "center",
+                                marginBottom: 6,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 650,
+                                  color: "var(--tek-ash)",
+                                }}
+                              >
+                                {t(locale, "saleFxCurrency")} {index + 1}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => removeTenderLine(line.key)}
+                                style={{ ...linkBtn, marginTop: 0 }}
+                              >
+                                {t(locale, "saleFxRemoveLine")}
+                              </button>
+                            </div>
+                          ) : null}
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                currencyOptions.length > 1 ? "100px 1fr" : "1fr",
+                              gap: 8,
+                              alignItems: "end",
+                            }}
+                          >
+                            {currencyOptions.length > 1 ? (
+                              <label style={{ ...payLabel, marginTop: 0 }}>
+                                {t(locale, "saleFxCurrency")}
+                                <select
+                                  value={line.devise}
+                                  disabled={submitting}
+                                  onChange={(e) =>
+                                    updateTenderLine(line.key, {
+                                      devise: e.target.value.toUpperCase(),
+                                    })
+                                  }
+                                  style={paySelect}
+                                >
+                                  {currencyOptions.map((code) => (
+                                    <option key={code} value={code}>
+                                      {code}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
+                            <label style={{ ...payLabel, marginTop: 0 }}>
+                              {t(locale, "salePaidLabel")}
+                              <input
+                                ref={index === 0 ? paidRef : undefined}
+                                type="text"
+                                inputMode="decimal"
+                                value={line.amount}
+                                disabled={submitting}
+                                onChange={(e) =>
+                                  updateTenderLine(line.key, { amount: e.target.value })
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void submitSale();
+                                  }
+                                }}
+                                style={payInput}
+                              />
+                            </label>
+                          </div>
+                          {foreign && rate && line.amountValue > 0 ? (
+                            <p style={{ ...payHint, marginTop: 6 }}>
+                              {formatExchangeRateHint(
+                                mainCurrency,
+                                line.devise,
+                                Number(rate.taux),
+                              )}
+                              {" · "}
+                              {t(locale, "saleFxConverted")}:{" "}
+                              {formatPrice(line.principal, locale, mainCurrency)}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <label style={payLabel}>
+                    {t(locale, "salePaidLabel")}
+                    <input
+                      ref={paidRef}
+                      type="text"
+                      inputMode="decimal"
+                      value={paidInput}
+                      disabled={submitting}
+                      onChange={(e) => {
+                        setPaidInput(e.target.value);
+                        setSubmitError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void submitSale();
+                        }
+                      }}
+                      style={payInput}
+                    />
+                  </label>
+                )}
+
+                {useFxTender && tenderLines.length < 5 ? (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={addTenderLine}
+                    style={{ ...linkBtn, marginTop: 10 }}
+                  >
+                    {t(locale, "saleFxAddCurrency")}
+                  </button>
+                ) : null}
+
+                {useFxTender && tenderLines.length > 1 ? (
+                  <div style={{ ...payTotalBox, marginTop: 12 }}>
+                    <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
+                      {t(locale, "saleFxReceivedTotal")}
+                    </span>
+                    <strong>
+                      {formatPrice(fxReceivedPrincipal, locale, mainCurrency)}
+                    </strong>
+                  </div>
+                ) : null}
+
+                <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
+                  {changeAmount > 0 ? (
+                    <>
+                      <span>{t(locale, "saleChangeLabel")}</span>
+                      <strong>{formatPrice(changeAmount, locale, mainCurrency)}</strong>
+                    </>
+                  ) : remainingAmount > 0.005 ? (
+                    <>
+                      <span>{t(locale, "saleRemainingLabel")}</span>
+                      <strong>
+                        {formatPrice(remainingAmount, locale, mainCurrency)}
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      <span>{t(locale, "saleChangeLabel")}</span>
+                      <strong>{formatPrice(0, locale, mainCurrency)}</strong>
+                    </>
+                  )}
+                </div>
+                {changeAmount > 0 && !useFxTender ? (
+                  <p style={payHint}>{t(locale, "saleChangeHint")}</p>
+                ) : null}
+              </>
+            ) : (
+              <p style={{ ...payHint, marginTop: 14 }}>{t(locale, "salePayOtherHint")}</p>
+            )}
+
+            {submitError ? (
+              <p style={{ margin: "12px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
+                {submitError}
+              </p>
+            ) : null}
+
+            <div style={{ ...actions, marginTop: 16 }}>
+              <button
+                ref={payConfirmRef}
+                type="button"
+                disabled={submitting}
+                onClick={() => void submitSale()}
+                style={{
+                  ...confirmBtn,
+                  opacity: submitting ? 0.7 : 1,
+                }}
+              >
+                {submitting
+                  ? t(locale, "saleSubmitting")
+                  : t(locale, isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setPaymentOpen(false)}
+                style={cancelBtn}
+              >
+                {t(locale, "posQtyCancel")}
+              </button>
+            </div>
+          </section>
+        ) : (
+        <>
         <div style={grid}>
           <section style={panel}>
             <h3 style={sectionTitle}>{t(locale, "saleValidateLines")}</h3>
@@ -638,284 +900,8 @@ export function SaleValidateModal({
             {t(locale, "posQtyCancel")}
           </button>
         </div>
-
-        {paymentOpen ? (
-          <div
-            role="presentation"
-            style={payBackdrop}
-            onClick={() => !submitting && setPaymentOpen(false)}
-          >
-            <div
-              ref={payDialogRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sale-pay-title"
-              tabIndex={-1}
-              style={payDialog}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p style={eyebrow}>{t(locale, "salePaymentMethod")}</p>
-              <h3 id="sale-pay-title" style={{ margin: "4px 0 0", fontSize: 20 }}>
-                {t(locale, "salePaidTitle")}
-              </h3>
-
-              <div style={payMethodRow} role="group" aria-label={t(locale, "salePaymentMethod")}>
-                {PAYMENT_METHODS.map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => {
-                      setPaymentMethod(method);
-                      setSubmitError(null);
-                      if (method === "especes") {
-                        setPaidInput(formatAmountInput(total));
-                        if (fxActive) {
-                          setTenderLines([
-                            {
-                              key: `line-${Date.now()}`,
-                              devise: mainCurrency,
-                              amount: total > 0 ? formatAmountInput(total) : "",
-                            },
-                          ]);
-                        }
-                      }
-                    }}
-                    style={paymentMethod === method ? payChipActive : payChip}
-                  >
-                    {t(locale, PAYMENT_LABEL_KEY[method])}
-                  </button>
-                ))}
-              </div>
-
-              <div style={payTotalBox}>
-                <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
-                  {t(locale, "posCartTotal")}
-                </span>
-                <strong style={{ fontSize: 22 }}>
-                  {formatPrice(total, locale, mainCurrency)}
-                </strong>
-              </div>
-
-              {isCash ? (
-                <>
-                  {useFxTender ? (
-                    <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-                      {linePreviews.map((line, index) => {
-                        const rate = exchangeRates.find(
-                          (item) => item.devise.trim().toUpperCase() === line.devise,
-                        );
-                        const foreign = line.devise !== mainCurrency;
-                        return (
-                          <div
-                            key={line.key}
-                            style={tenderLines.length > 1 ? fxLineBox : undefined}
-                          >
-                            {tenderLines.length > 1 ? (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  gap: 8,
-                                  alignItems: "center",
-                                  marginBottom: 6,
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 650,
-                                    color: "var(--tek-ash)",
-                                  }}
-                                >
-                                  {t(locale, "saleFxCurrency")} {index + 1}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={submitting}
-                                  onClick={() => removeTenderLine(line.key)}
-                                  style={{ ...linkBtn, marginTop: 0 }}
-                                >
-                                  {t(locale, "saleFxRemoveLine")}
-                                </button>
-                              </div>
-                            ) : null}
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns:
-                                  currencyOptions.length > 1 ? "96px 1fr" : "1fr",
-                                gap: 8,
-                                alignItems: "end",
-                              }}
-                            >
-                              {currencyOptions.length > 1 ? (
-                                <label style={{ ...payLabel, marginTop: 0 }}>
-                                  {t(locale, "saleFxCurrency")}
-                                  <select
-                                    value={line.devise}
-                                    disabled={submitting}
-                                    onChange={(e) =>
-                                      updateTenderLine(line.key, {
-                                        devise: e.target.value.toUpperCase(),
-                                      })
-                                    }
-                                    style={paySelect}
-                                  >
-                                    {currencyOptions.map((code) => (
-                                      <option key={code} value={code}>
-                                        {code}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              ) : null}
-                              <label style={{ ...payLabel, marginTop: 0 }}>
-                                {t(locale, "salePaidLabel")}
-                                <input
-                                  ref={index === 0 ? paidRef : undefined}
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={line.amount}
-                                  disabled={submitting}
-                                  onChange={(e) =>
-                                    updateTenderLine(line.key, { amount: e.target.value })
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      void submitSale();
-                                    }
-                                  }}
-                                  style={payInput}
-                                />
-                              </label>
-                            </div>
-                            {foreign && rate ? (
-                              <p style={{ ...payHint, marginTop: 6 }}>
-                                {formatExchangeRateHint(
-                                  mainCurrency,
-                                  line.devise,
-                                  Number(rate.taux),
-                                )}
-                                {" · "}
-                                {t(locale, "saleFxConverted")}:{" "}
-                                {formatPrice(line.principal, locale, mainCurrency)}
-                              </p>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <label style={payLabel}>
-                      {t(locale, "salePaidLabel")}
-                      <input
-                        ref={paidRef}
-                        type="text"
-                        inputMode="decimal"
-                        value={paidInput}
-                        disabled={submitting}
-                        onChange={(e) => {
-                          setPaidInput(e.target.value);
-                          setSubmitError(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void submitSale();
-                          }
-                        }}
-                        style={payInput}
-                      />
-                    </label>
-                  )}
-
-                  {useFxTender && tenderLines.length < 5 ? (
-                    <button
-                      type="button"
-                      disabled={submitting}
-                      onClick={addTenderLine}
-                      style={{ ...linkBtn, marginTop: 10 }}
-                    >
-                      {t(locale, "saleFxAddCurrency")}
-                    </button>
-                  ) : null}
-
-                  {useFxTender && tenderLines.length > 1 ? (
-                    <div style={{ ...payTotalBox, marginTop: 12 }}>
-                      <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
-                        {t(locale, "saleFxReceivedTotal")}
-                      </span>
-                      <strong>
-                        {formatPrice(fxReceivedPrincipal, locale, mainCurrency)}
-                      </strong>
-                    </div>
-                  ) : null}
-
-                  <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
-                    {changeAmount > 0 ? (
-                      <>
-                        <span>{t(locale, "saleChangeLabel")}</span>
-                        <strong>
-                          {formatPrice(changeAmount, locale, mainCurrency)}
-                        </strong>
-                      </>
-                    ) : remainingAmount > 0.005 ? (
-                      <>
-                        <span>{t(locale, "saleRemainingLabel")}</span>
-                        <strong>
-                          {formatPrice(remainingAmount, locale, mainCurrency)}
-                        </strong>
-                      </>
-                    ) : (
-                      <>
-                        <span>{t(locale, "saleChangeLabel")}</span>
-                        <strong>{formatPrice(0, locale, mainCurrency)}</strong>
-                      </>
-                    )}
-                  </div>
-                  {changeAmount > 0 && !useFxTender ? (
-                    <p style={payHint}>{t(locale, "saleChangeHint")}</p>
-                  ) : null}
-                </>
-              ) : (
-                <p style={payHint}>{t(locale, "salePayOtherHint")}</p>
-              )}
-
-              {submitError ? (
-                <p style={{ margin: "12px 0 0", color: "var(--tek-danger)", fontSize: 13 }}>
-                  {submitError}
-                </p>
-              ) : null}
-
-              <div style={{ ...actions, marginTop: 16 }}>
-                <button
-                  ref={payConfirmRef}
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => void submitSale()}
-                  style={{
-                    ...confirmBtn,
-                    opacity: submitting ? 0.7 : 1,
-                  }}
-                >
-                  {submitting
-                    ? t(locale, "saleSubmitting")
-                    : t(locale, isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
-                </button>
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => setPaymentOpen(false)}
-                  style={cancelBtn}
-                >
-                  {t(locale, "posQtyCancel")}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        </>
+        )}
       </div>
     </div>
   );
@@ -1156,28 +1142,6 @@ const cancelBtn: CSSProperties = {
   fontWeight: 650,
   fontSize: 14,
   cursor: "pointer",
-};
-
-const payBackdrop: CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  zIndex: 2,
-  background: "rgba(12, 12, 12, 0.4)",
-  display: "grid",
-  placeItems: "center",
-  padding: 16,
-  borderRadius: 20,
-};
-
-const payDialog: CSSProperties = {
-  width: "min(400px, 100%)",
-  maxHeight: "min(80vh, 640px)",
-  overflow: "auto",
-  background: "var(--tek-card)",
-  borderRadius: 16,
-  border: "1px solid var(--tek-line)",
-  boxShadow: "var(--tek-shadow)",
-  padding: 20,
 };
 
 const fxLineBox: CSSProperties = {

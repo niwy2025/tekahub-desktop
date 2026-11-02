@@ -18,6 +18,13 @@ export function usesInverseExchangeInput(
   return HARD_CURRENCIES.has(main);
 }
 
+function formatRateNumber(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  if (Number.isInteger(value)) return String(value);
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
 export function formatExchangeRateHint(
   mainCurrency: string,
   foreignCurrency: string,
@@ -28,9 +35,9 @@ export function formatExchangeRateHint(
   const display = backendRateToDisplay(main, foreign, backendTaux);
   if (display == null) return `${foreign} / ${main}`;
   if (usesInverseExchangeInput(main, foreign)) {
-    return `1 ${main} = ${display} ${foreign}`;
+    return `1 ${main} = ${formatRateNumber(display)} ${foreign}`;
   }
-  return `1 ${foreign} = ${display} ${main}`;
+  return `1 ${foreign} = ${formatRateNumber(display)} ${main}`;
 }
 
 export function backendRateToDisplay(
