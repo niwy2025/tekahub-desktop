@@ -63,14 +63,14 @@ export function setConnectionSettings(patch: Partial<ConnectionSettings>): Conne
 
 /**
  * Résolution effective :
- * 1. API_BASE_URL dans l’environnement (.env / process) — prioritaire en dev
- * 2. Valeur enregistrée dans userData/config/connection.json
+ * 1. Valeur enregistrée par l’utilisateur (connection.json) — toujours prioritaire
+ * 2. API_BASE_URL dans l’environnement (.env / process) — défaut pratique en dev
  * 3. URL de production par défaut
  */
 export function resolveApiBaseUrl(): string {
-  const fromEnv = normalizeUrl(process.env.API_BASE_URL);
-  if (fromEnv) return fromEnv;
   const saved = getConnectionSettings().apiBaseUrl;
   if (saved) return saved;
+  const fromEnv = normalizeUrl(process.env.API_BASE_URL);
+  if (fromEnv) return fromEnv;
   return DEFAULT_API_BASE_URL;
 }

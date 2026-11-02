@@ -175,10 +175,7 @@ function ConnectionPanel({ locale }: { locale: AppLocale }) {
   return (
     <Panel title={t(locale, "connectionSection")}>
       <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-        {t(
-          locale,
-          view?.fromEnv ? "connectionEnvOverride" : "connectionHint",
-        )}
+        {t(locale, "connectionHint")}
       </p>
 
       {loading || !view ? (
@@ -192,7 +189,7 @@ function ConnectionPanel({ locale }: { locale: AppLocale }) {
             <input
               type="url"
               value={draft}
-              disabled={saving || view.fromEnv}
+              disabled={saving}
               placeholder={t(locale, "connectionApiPlaceholder")}
               onChange={(e) => setDraft(e.target.value)}
               style={selectInput}
@@ -205,7 +202,7 @@ function ConnectionPanel({ locale }: { locale: AppLocale }) {
             <button
               type="button"
               style={primaryBtn}
-              disabled={saving || view.fromEnv || !draft.trim()}
+              disabled={saving || !draft.trim()}
               onClick={() => void save(draft.trim())}
             >
               {t(locale, "connectionSave")}
@@ -213,7 +210,7 @@ function ConnectionPanel({ locale }: { locale: AppLocale }) {
             <button
               type="button"
               style={ghostBtn}
-              disabled={saving || view.fromEnv}
+              disabled={saving}
               onClick={() => void save(view.defaultApiBaseUrl)}
             >
               {t(locale, "connectionResetDefault")}

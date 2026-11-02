@@ -320,12 +320,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle(IpcChannels.getConnectionSettings, (): ConnectionSettingsView => {
     const saved = getConnectionSettings();
-    const fromEnv = Boolean(process.env.API_BASE_URL?.trim());
     return {
       ...saved,
       effectiveApiBaseUrl: appConfig.apiBaseUrl,
       defaultApiBaseUrl: DEFAULT_API_BASE_URL,
-      fromEnv,
+      // L’UI reste toujours éditable ; l’env ne sert que de valeur initiale.
+      fromEnv: false,
     };
   });
 
@@ -335,12 +335,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       try {
         setConnectionSettings(patch ?? {});
         const saved = getConnectionSettings();
-        const fromEnv = Boolean(process.env.API_BASE_URL?.trim());
         return {
           ...saved,
           effectiveApiBaseUrl: appConfig.apiBaseUrl,
           defaultApiBaseUrl: DEFAULT_API_BASE_URL,
-          fromEnv,
+          fromEnv: false,
         };
       } catch (err) {
         throw toIpcError(err);

@@ -328,8 +328,6 @@ function ConnectionSettingsModal({
     }
   }
 
-  const envLocked = Boolean(connection?.fromEnv);
-
   return (
     <div
       role="presentation"
@@ -351,7 +349,7 @@ function ConnectionSettingsModal({
               {t(locale, "connectionSection")}
             </h2>
             <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--tek-ash)", lineHeight: 1.45 }}>
-              {t(locale, envLocked ? "connectionEnvOverride" : "connectionHint")}
+              {t(locale, "connectionHint")}
             </p>
           </div>
           <button type="button" onClick={onClose} style={iconCloseBtn} aria-label={t(locale, "connectionClose")}>
@@ -375,7 +373,7 @@ function ConnectionSettingsModal({
             ref={inputRef}
             type="url"
             value={apiDraft}
-            disabled={savingApi || envLocked}
+            disabled={savingApi}
             placeholder={t(locale, "connectionApiPlaceholder")}
             onChange={(e) => setApiDraft(e.target.value)}
             style={inputStyle}
@@ -385,7 +383,7 @@ function ConnectionSettingsModal({
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
           <button
             type="button"
-            disabled={savingApi || envLocked || !apiDraft.trim()}
+            disabled={savingApi || !apiDraft.trim()}
             onClick={() => void saveApiUrl()}
             style={{ ...primaryBtn, width: "auto", padding: "10px 18px", boxShadow: "none" }}
           >
