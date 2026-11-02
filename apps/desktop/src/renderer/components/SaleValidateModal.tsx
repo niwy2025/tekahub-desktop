@@ -48,6 +48,24 @@ const PAYMENT_LABEL_KEY: Record<PaymentMethod, MessageKey> = {
   autre: "salePayAutre",
 };
 
+const FOCUSABLE_SEL =
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function listFocusables(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SEL)).filter((el) => {
+    if (el.tabIndex < 0) return false;
+    const style = window.getComputedStyle(el);
+    return style.visibility !== "hidden" && style.display !== "none";
+  });
+}
+
+function isTextField(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
+  if (!el) return false;
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (!(el instanceof HTMLInputElement)) return false;
+  return !["button", "checkbox", "radio", "submit", "reset", "file"].includes(el.type);
+}
+
 type Props = {
   locale: AppLocale;
   currency?: string | null;
@@ -116,6 +134,7 @@ export function SaleValidateModal({
   const confirmRef = useRef<HTMLButtonElement>(null);
   const paidRef = useRef<HTMLInputElement>(null);
   const payConfirmRef = useRef<HTMLButtonElement>(null);
+  const payMethodRefs = useRef<Partial<Record<PaymentMethod, HTMLButtonElement | null>>>({});
   const clientsState = useSyncExternalStore(
     subscribeClients,
     getClientsSnapshot,
@@ -185,9 +204,46 @@ export function SaleValidateModal({
     phoneRef.current?.focus();
   }, []);
 
+  function applyPaymentMethod(method: PaymentMethod) {
+    setPaymentMethod(method);
+    setSubmitError(null);
+    if (method === "especes") {
+      setPaidInput(formatAmountInput(total));
+      if (fxActive) {
+        setTenderLines([
+          {
+            key: `line-${Date.now()}`,
+            devise: mainCurrency,
+            amount: total > 0 ? formatAmountInput(total) : "",
+          },
+        ]);
+      }
+    }
+  }
+
+  function focusRelative(delta: number) {
+    const root = dialogRef.current;
+    if (!root) return;
+    const items = listFocusables(root);
+    if (items.length === 0) return;
+    const active = document.activeElement as HTMLElement | null;
+    const index = active ? items.indexOf(active) : -1;
+    const next =
+      items[(index + delta + items.length * 10) % items.length] ?? items[0];
+    next.focus();
+    if (next instanceof HTMLInputElement && next.type === "text") {
+      next.select();
+    }
+  }
+
   useEffect(() => {
     if (!paymentOpen) return;
     requestAnimationFrame(() => {
+      const chip = payMethodRefs.current[paymentMethod];
+      if (chip) {
+        chip.focus();
+        return;
+      }
       if (paymentMethod === "especes") {
         paidRef.current?.focus();
         paidRef.current?.select();
@@ -195,22 +251,83 @@ export function SaleValidateModal({
         payConfirmRef.current?.focus();
       }
     });
-  }, [paymentOpen, paymentMethod]);
+  }, [paymentOpen]);
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape" || submitting) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (paymentOpen) {
-        setPaymentOpen(false);
+      if (submitting) return;
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (paymentOpen) {
+          setPaymentOpen(false);
+          return;
+        }
+        onClose();
         return;
       }
-      onClose();
+
+      const isArrow =
+        e.key === "ArrowDown" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight";
+      if (!isArrow) return;
+
+      const active = document.activeElement;
+      const onMethodChip =
+        active instanceof HTMLElement &&
+        active.getAttribute("data-pay-method") != null;
+
+      // ← → : changer le moyen de paiement (étape paiement)
+      if (
+        paymentOpen &&
+        (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
+        (onMethodChip || !isTextField(active))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = PAYMENT_METHODS.indexOf(paymentMethod);
+        const nextIdx =
+          e.key === "ArrowRight"
+            ? (idx + 1) % PAYMENT_METHODS.length
+            : (idx - 1 + PAYMENT_METHODS.length) % PAYMENT_METHODS.length;
+        const nextMethod = PAYMENT_METHODS[nextIdx];
+        applyPaymentMethod(nextMethod);
+        requestAnimationFrame(() => payMethodRefs.current[nextMethod]?.focus());
+        return;
+      }
+
+      // Dans un champ texte : ← → déplacent le curseur, ↑ ↓ changent de champ
+      if (isTextField(active) && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        return;
+      }
+
+      // Select natif : ↑ ↓ changent l’option
+      if (active instanceof HTMLSelectElement && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        focusRelative(1);
+      } else {
+        focusRelative(-1);
+      }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose, submitting, paymentOpen]);
+  }, [
+    onClose,
+    submitting,
+    paymentOpen,
+    paymentMethod,
+    fxActive,
+    mainCurrency,
+    total,
+  ]);
 
   function runClientCheck(localRaw: string) {
     const local = toLocalPhone(localRaw);
@@ -478,27 +595,26 @@ export function SaleValidateModal({
 
         {paymentOpen ? (
           <section style={{ ...panel, minHeight: 0 }}>
-            <div style={payMethodRow} role="group" aria-label={t(locale, "salePaymentMethod")}>
+            <div
+              style={payMethodRow}
+              role="radiogroup"
+              aria-label={t(locale, "salePaymentMethod")}
+            >
               {PAYMENT_METHODS.map((method) => (
                 <button
                   key={method}
+                  ref={(el) => {
+                    payMethodRefs.current[method] = el;
+                  }}
                   type="button"
+                  role="radio"
+                  aria-checked={paymentMethod === method}
+                  data-pay-method={method}
                   disabled={submitting}
+                  tabIndex={paymentMethod === method ? 0 : -1}
                   onClick={() => {
-                    setPaymentMethod(method);
-                    setSubmitError(null);
-                    if (method === "especes") {
-                      setPaidInput(formatAmountInput(total));
-                      if (fxActive) {
-                        setTenderLines([
-                          {
-                            key: `line-${Date.now()}`,
-                            devise: mainCurrency,
-                            amount: total > 0 ? formatAmountInput(total) : "",
-                          },
-                        ]);
-                      }
-                    }
+                    applyPaymentMethod(method);
+                    payMethodRefs.current[method]?.focus();
                   }}
                   style={paymentMethod === method ? payChipActive : payChip}
                 >
