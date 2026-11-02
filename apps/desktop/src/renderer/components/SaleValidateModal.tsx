@@ -166,17 +166,18 @@ export function SaleValidateModal({
   const fxRemaining = Math.max(0, roundMoney(total - fxAppliedPrincipal));
   const fxChange = Math.max(0, roundMoney(fxReceivedPrincipal - fxAppliedPrincipal));
 
-  const paidAmount = fxActive
+  const useFxTender = fxActive && isCash;
+  const paidAmount = useFxTender
     ? fxReceivedPrincipal
     : isCash
       ? parseAmount(paidInput)
       : total;
-  const changeAmount = fxActive
+  const changeAmount = useFxTender
     ? fxChange
     : isCash
       ? Math.max(0, Math.round((paidAmount - total) * 100) / 100)
       : 0;
-  const remainingAmount = fxActive
+  const remainingAmount = useFxTender
     ? fxRemaining
     : isCash
       ? Math.max(0, Math.round((total - paidAmount) * 100) / 100)
@@ -326,7 +327,7 @@ export function SaleValidateModal({
 
     let encaissements: SalePaymentEncaissement[] | null = null;
 
-    if (fxActive) {
+    if (useFxTender) {
       encaissements = linePreviews
         .filter((line) => line.amountValue > 0)
         .map((line) => ({
@@ -412,8 +413,8 @@ export function SaleValidateModal({
           total: unit * line.qty,
         };
       });
-      const cashReceived = fxActive || isCash ? paidAmount : null;
-      const changeDue = fxActive || isCash ? changeAmount : null;
+      const cashReceived = isCash ? paidAmount : null;
+      const changeDue = isCash ? changeAmount : null;
 
       void (async () => {
         try {
@@ -669,6 +670,15 @@ export function SaleValidateModal({
                       setSubmitError(null);
                       if (method === "especes") {
                         setPaidInput(formatAmountInput(total));
+                        if (fxActive) {
+                          setTenderLines([
+                            {
+                              key: `line-${Date.now()}`,
+                              devise: mainCurrency,
+                              amount: total > 0 ? formatAmountInput(total) : "",
+                            },
+                          ]);
+                        }
                       }
                     }}
                     style={paymentMethod === method ? payChipActive : payChip}
@@ -687,106 +697,141 @@ export function SaleValidateModal({
                 </strong>
               </div>
 
-              {fxActive ? (
+              {isCash ? (
                 <>
-                  <p style={payHint}>{t(locale, "saleFxHint")}</p>
-                  <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-                    {linePreviews.map((line, index) => {
-                      const rate = exchangeRates.find(
-                        (item) => item.devise.trim().toUpperCase() === line.devise,
-                      );
-                      return (
-                        <div key={line.key} style={fxLineBox}>
+                  {useFxTender ? (
+                    <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                      {linePreviews.map((line, index) => {
+                        const rate = exchangeRates.find(
+                          (item) => item.devise.trim().toUpperCase() === line.devise,
+                        );
+                        const foreign = line.devise !== mainCurrency;
+                        return (
                           <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 8,
-                              alignItems: "center",
-                            }}
+                            key={line.key}
+                            style={tenderLines.length > 1 ? fxLineBox : undefined}
                           >
-                            <span style={{ fontSize: 11, fontWeight: 650, color: "var(--tek-ash)" }}>
-                              {t(locale, "saleFxCurrency")} {index + 1}
-                            </span>
                             {tenderLines.length > 1 ? (
-                              <button
-                                type="button"
-                                disabled={submitting}
-                                onClick={() => removeTenderLine(line.key)}
-                                style={linkBtn}
-                              >
-                                {t(locale, "saleFxRemoveLine")}
-                              </button>
-                            ) : null}
-                          </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 8 }}>
-                            <label style={{ ...payLabel, marginTop: 0 }}>
-                              {t(locale, "saleFxCurrency")}
-                              <select
-                                value={line.devise}
-                                disabled={submitting}
-                                onChange={(e) =>
-                                  updateTenderLine(line.key, {
-                                    devise: e.target.value.toUpperCase(),
-                                  })
-                                }
-                                style={{ ...payInput, fontSize: 14, padding: "10px 12px" }}
-                              >
-                                {currencyOptions.map((code) => (
-                                  <option key={code} value={code}>
-                                    {code}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label style={{ ...payLabel, marginTop: 0 }}>
-                              {t(locale, "saleFxAmount")}
-                              <input
-                                ref={index === 0 ? paidRef : undefined}
-                                type="text"
-                                inputMode="decimal"
-                                value={line.amount}
-                                disabled={submitting}
-                                onChange={(e) =>
-                                  updateTenderLine(line.key, { amount: e.target.value })
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    void submitSale();
-                                  }
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 8,
+                                  alignItems: "center",
+                                  marginBottom: 6,
                                 }}
-                                style={payInput}
-                              />
-                            </label>
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 8,
-                              fontSize: 12,
-                              color: "var(--tek-ash)",
-                            }}
-                          >
-                            <span>
-                              {t(locale, "saleFxConverted")}:{" "}
-                              <strong style={{ color: "var(--tek-ink)" }}>
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 650,
+                                    color: "var(--tek-ash)",
+                                  }}
+                                >
+                                  {t(locale, "saleFxCurrency")} {index + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={submitting}
+                                  onClick={() => removeTenderLine(line.key)}
+                                  style={{ ...linkBtn, marginTop: 0 }}
+                                >
+                                  {t(locale, "saleFxRemoveLine")}
+                                </button>
+                              </div>
+                            ) : null}
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns:
+                                  currencyOptions.length > 1 ? "96px 1fr" : "1fr",
+                                gap: 8,
+                                alignItems: "end",
+                              }}
+                            >
+                              {currencyOptions.length > 1 ? (
+                                <label style={{ ...payLabel, marginTop: 0 }}>
+                                  {t(locale, "saleFxCurrency")}
+                                  <select
+                                    value={line.devise}
+                                    disabled={submitting}
+                                    onChange={(e) =>
+                                      updateTenderLine(line.key, {
+                                        devise: e.target.value.toUpperCase(),
+                                      })
+                                    }
+                                    style={paySelect}
+                                  >
+                                    {currencyOptions.map((code) => (
+                                      <option key={code} value={code}>
+                                        {code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              ) : null}
+                              <label style={{ ...payLabel, marginTop: 0 }}>
+                                {t(locale, "salePaidLabel")}
+                                <input
+                                  ref={index === 0 ? paidRef : undefined}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={line.amount}
+                                  disabled={submitting}
+                                  onChange={(e) =>
+                                    updateTenderLine(line.key, { amount: e.target.value })
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void submitSale();
+                                    }
+                                  }}
+                                  style={payInput}
+                                />
+                              </label>
+                            </div>
+                            {foreign && rate ? (
+                              <p style={{ ...payHint, marginTop: 6 }}>
+                                {formatExchangeRateHint(
+                                  mainCurrency,
+                                  line.devise,
+                                  Number(rate.taux),
+                                )}
+                                {" · "}
+                                {t(locale, "saleFxConverted")}:{" "}
                                 {formatPrice(line.principal, locale, mainCurrency)}
-                              </strong>
-                            </span>
-                            {rate && line.devise !== mainCurrency ? (
-                              <span>
-                                {t(locale, "saleFxRate")}:{" "}
-                                {formatExchangeRateHint(mainCurrency, line.devise, Number(rate.taux))}
-                              </span>
+                              </p>
                             ) : null}
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {tenderLines.length < 5 ? (
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <label style={payLabel}>
+                      {t(locale, "salePaidLabel")}
+                      <input
+                        ref={paidRef}
+                        type="text"
+                        inputMode="decimal"
+                        value={paidInput}
+                        disabled={submitting}
+                        onChange={(e) => {
+                          setPaidInput(e.target.value);
+                          setSubmitError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void submitSale();
+                          }
+                        }}
+                        style={payInput}
+                      />
+                    </label>
+                  )}
+
+                  {useFxTender && tenderLines.length < 5 ? (
                     <button
                       type="button"
                       disabled={submitting}
@@ -796,22 +841,32 @@ export function SaleValidateModal({
                       {t(locale, "saleFxAddCurrency")}
                     </button>
                   ) : null}
-                  <div style={{ ...payTotalBox, marginTop: 12 }}>
-                    <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
-                      {t(locale, "saleFxReceivedTotal")}
-                    </span>
-                    <strong>{formatPrice(fxReceivedPrincipal, locale, mainCurrency)}</strong>
-                  </div>
+
+                  {useFxTender && tenderLines.length > 1 ? (
+                    <div style={{ ...payTotalBox, marginTop: 12 }}>
+                      <span style={{ color: "var(--tek-ash)", fontSize: 13 }}>
+                        {t(locale, "saleFxReceivedTotal")}
+                      </span>
+                      <strong>
+                        {formatPrice(fxReceivedPrincipal, locale, mainCurrency)}
+                      </strong>
+                    </div>
+                  ) : null}
+
                   <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
                     {changeAmount > 0 ? (
                       <>
                         <span>{t(locale, "saleChangeLabel")}</span>
-                        <strong>{formatPrice(changeAmount, locale, mainCurrency)}</strong>
+                        <strong>
+                          {formatPrice(changeAmount, locale, mainCurrency)}
+                        </strong>
                       </>
                     ) : remainingAmount > 0.005 ? (
                       <>
                         <span>{t(locale, "saleRemainingLabel")}</span>
-                        <strong>{formatPrice(remainingAmount, locale, mainCurrency)}</strong>
+                        <strong>
+                          {formatPrice(remainingAmount, locale, mainCurrency)}
+                        </strong>
                       </>
                     ) : (
                       <>
@@ -820,50 +875,7 @@ export function SaleValidateModal({
                       </>
                     )}
                   </div>
-                </>
-              ) : isCash ? (
-                <>
-                  <label style={payLabel}>
-                    {t(locale, "salePaidLabel")}
-                    <input
-                      ref={paidRef}
-                      type="text"
-                      inputMode="decimal"
-                      value={paidInput}
-                      disabled={submitting}
-                      onChange={(e) => {
-                        setPaidInput(e.target.value);
-                        setSubmitError(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void submitSale();
-                        }
-                      }}
-                      style={payInput}
-                    />
-                  </label>
-
-                  <div style={changeBox(changeAmount > 0, remainingAmount > 0.005)}>
-                    {changeAmount > 0 ? (
-                      <>
-                        <span>{t(locale, "saleChangeLabel")}</span>
-                        <strong>{formatPrice(changeAmount, locale, currency)}</strong>
-                      </>
-                    ) : remainingAmount > 0.005 ? (
-                      <>
-                        <span>{t(locale, "saleRemainingLabel")}</span>
-                        <strong>{formatPrice(remainingAmount, locale, currency)}</strong>
-                      </>
-                    ) : (
-                      <>
-                        <span>{t(locale, "saleChangeLabel")}</span>
-                        <strong>{formatPrice(0, locale, currency)}</strong>
-                      </>
-                    )}
-                  </div>
-                  {changeAmount > 0 ? (
+                  {changeAmount > 0 && !useFxTender ? (
                     <p style={payHint}>{t(locale, "saleChangeHint")}</p>
                   ) : null}
                 </>
@@ -890,7 +902,7 @@ export function SaleValidateModal({
                 >
                   {submitting
                     ? t(locale, "saleSubmitting")
-                    : t(locale, fxActive || isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
+                    : t(locale, isCash ? "salePaidConfirm" : "salePaidConfirmOther")}
                 </button>
                 <button
                   type="button"
@@ -1158,8 +1170,8 @@ const payBackdrop: CSSProperties = {
 };
 
 const payDialog: CSSProperties = {
-  width: "min(440px, 100%)",
-  maxHeight: "min(85vh, 720px)",
+  width: "min(400px, 100%)",
+  maxHeight: "min(80vh, 640px)",
   overflow: "auto",
   background: "var(--tek-card)",
   borderRadius: 16,
@@ -1175,6 +1187,17 @@ const fxLineBox: CSSProperties = {
   padding: 12,
   display: "grid",
   gap: 8,
+};
+
+const paySelect: CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--tek-line)",
+  borderRadius: 12,
+  padding: "14px 12px",
+  fontSize: 15,
+  fontWeight: 700,
+  background: "var(--tek-bg)",
+  color: "var(--tek-ink)",
 };
 
 const payMethodRow: CSSProperties = {
