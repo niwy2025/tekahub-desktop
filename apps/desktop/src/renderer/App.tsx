@@ -108,7 +108,7 @@ export function App() {
     return (
       <div
         style={{
-          minHeight: "100%",
+          height: "100%",
           display: "grid",
           placeItems: "center",
           color: "var(--tek-ash)",
@@ -121,19 +121,21 @@ export function App() {
 
   if (bridgeError) {
     return (
-      <div style={{ padding: 40, color: "var(--tek-danger)" }}>{bridgeError}</div>
+      <div style={{ height: "100%", padding: 40, color: "var(--tek-danger)" }}>
+        {bridgeError}
+      </div>
     );
   }
 
   if (!user) {
     return (
-      <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <UpdateBanner
           locale={locale}
           shell={updates.shell}
           onInstall={() => void updates.installShell()}
         />
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minHeight: 0 }}>
           <LoginScreen
             locale={locale}
             onLocaleChange={(next) => void setLocale(next)}
@@ -204,7 +206,15 @@ export function App() {
   }
 
   return (
-    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+    <div
+      style={{
+        height: "100%",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       <UpdateBanner
         locale={locale}
         shell={updates.shell}
@@ -214,7 +224,7 @@ export function App() {
           setModule("settings");
         }}
       />
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <AppShell
           locale={locale}
           onLocaleChange={(next) => void setLocale(next)}

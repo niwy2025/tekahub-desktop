@@ -433,7 +433,16 @@ export function PosScreen({
   }
 
   return (
-    <div style={{ padding: 24, display: "grid", gap: 16, height: "100%" }}>
+    <div
+      style={{
+        padding: 24,
+        display: "grid",
+        gap: 16,
+        height: "100%",
+        minHeight: 0,
+        gridTemplateRows: "auto auto 1fr",
+      }}
+    >
       <h1 style={{ margin: 0, fontSize: 28 }}>{t(locale, "posTitle")}</h1>
       {stockMsg ? (
         <p
@@ -450,7 +459,9 @@ export function PosScreen({
         >
           {stockMsg}
         </p>
-      ) : null}
+      ) : (
+        <div aria-hidden style={{ display: "none" }} />
+      )}
 
       <div
         style={{
@@ -458,10 +469,19 @@ export function PosScreen({
           gridTemplateColumns: "minmax(0, 1.15fr) minmax(300px, 0.85fr)",
           gap: 16,
           minHeight: 0,
+          height: "100%",
           alignItems: "stretch",
         }}
       >
-        <section style={panel}>
+        <section
+          style={{
+            ...panel,
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            height: "100%",
+          }}
+        >
           <label style={labelStyle}>{t(locale, "posSearch")}</label>
           <input
             ref={searchRef}
@@ -516,7 +536,8 @@ export function PosScreen({
             }}
             style={{
               marginTop: 14,
-              maxHeight: "calc(100vh - 260px)",
+              flex: 1,
+              minHeight: 0,
               overflow: "auto",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",

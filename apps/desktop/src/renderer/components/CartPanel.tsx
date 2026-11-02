@@ -75,6 +75,10 @@ export const CartPanel = forwardRef<HTMLButtonElement, Props>(function CartPanel
     <aside
       style={{
         ...panel,
+        height: "100%",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
         outline: cartFocused ? "2px solid var(--tek-yellow)" : "none",
         outlineOffset: 2,
       }}
@@ -264,7 +268,6 @@ const panel: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   minHeight: 0,
-  maxHeight: "calc(100vh - 180px)",
 };
 
 const header: CSSProperties = {
